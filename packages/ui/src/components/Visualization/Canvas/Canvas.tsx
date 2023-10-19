@@ -122,7 +122,7 @@ export const Canvas: FunctionComponent<PropsWithChildren<CanvasProps>> = (props)
     };
 
     controller.fromModel(model, false);
-  }, [controller, props.entities]);
+  }, [controller, props.entities, visibleFlows]);
 
   const handleCloseSideBar = useCallback(() => {
     setSelectedIds([]);

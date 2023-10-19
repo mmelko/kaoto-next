@@ -1,4 +1,4 @@
-import './FlowsList.css';
+import './FlowsList.scss';
 
 import { Button, Icon } from '@patternfly/react-core';
 import { EyeIcon, EyeSlashIcon, TrashIcon } from '@patternfly/react-icons';
@@ -41,13 +41,13 @@ export const FlowsList: FunctionComponent<IFlowsList> = (props) => {
       visualFlowsApi.toggleFlowVisible(flowId);
       props.onClose?.();
     },
-    [visualFlowsApi],
+    [props, visualFlowsApi],
   );
 
   return isListEmpty ? (
     <FlowsListEmptyState data-testid="flows-list-empty-state" />
   ) : (
-    <Table className="FlowsListTable" variant="compact" data-testid="flows-list-table">
+    <Table className="flows-list-table" variant="compact" data-testid="flows-list-table">
       <Thead>
         <Tr>
           <Th>{columnNames.current.id}</Th>

@@ -15,13 +15,10 @@ const getContextValue = () => {
   } as unknown as EntitiesContextResult;
 };
 describe('FlowsList.tsx', () => {
-  // @ts-ignore
   let contextValue = getContextValue();
-  //});
-
   const renderWithContext = () => {
     return render(
-      <EntitiesContext.Provider value={contextValue}>
+      <EntitiesContext.Provider value={contextValue as unknown as EntitiesContextResult}>
         <FlowsList />
       </EntitiesContext.Provider>,
     );

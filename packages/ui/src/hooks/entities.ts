@@ -24,24 +24,29 @@ export const useEntities = (): EntitiesContextResult => {
   const eventNotifier = useMemo(() => new EventNotifier(), []);
   const [camelResource, setCamelResource] = useState<CamelResource>(createCamelResource());
   const [visibleFlows, dispatch] = useReducer(VisibleFlowsReducer, {});
-  const visualFlowsApi = new VisualFlowsApi(dispatch);
+  const visualFlowsApi = useMemo(() => {
+    return new VisualFlowsApi(dispatch);
+  }, [dispatch]);
 
   /** Set the Source Code and updates the Entities */
-  const setCode = useCallback((code: string) => {
-    try {
-      setSourceCode(code);
-      const result = parse(code);
-      const camelResource = createCamelResource(result);
-      setCamelResource(camelResource);
-      const flows = camelResource.getVisualEntities().map((e) => e.id);
-      visualFlowsApi.setVisibleFlows(flows);
-      /** Notify subscribers that a `entities:update` happened */
-      eventNotifier.next('entities:update', undefined);
-    } catch (e) {
-      setCamelResource(createCamelResource());
-      console.error(e);
-    }
-  }, []);
+  const setCode = useCallback(
+    (code: string) => {
+      try {
+        setSourceCode(code);
+        const result = parse(code);
+        const camelResource = createCamelResource(result);
+        setCamelResource(camelResource);
+        const flows = camelResource.getVisualEntities().map((e) => e.id);
+        visualFlowsApi.setVisibleFlows(flows);
+        /** Notify subscribers that a `entities:update` happened */
+        eventNotifier.next('entities:update', undefined);
+      } catch (e) {
+        setCamelResource(createCamelResource());
+        console.error(e);
+      }
+    },
+    [eventNotifier, visualFlowsApi],
+  );
 
   /** Updates the Source Code whenever the entities are updated */
   const updateCodeFromEntities = useCallback(() => {
