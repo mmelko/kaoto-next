@@ -26,3 +26,4 @@ export * from './resolve-ref-if-needed';
 export * from './set-value';
 export * from './update-kamelet-from-custom-schema';
 export * from './weight-schema-properties';
+export * from './xml/xml-parser';
