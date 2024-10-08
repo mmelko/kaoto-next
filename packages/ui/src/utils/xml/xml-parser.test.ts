@@ -48,12 +48,13 @@ describe('XmlParser', () => {
   it('dereferences schema correctly', () => {
     const dSchema = { $ref: '#/items/definitions/org.apache.camel.model.language.ConstantExpression' };
     const result = parser.dereferenceSchema(dSchema);
-    expect(result).toEqual(schema.items.definitions['org.apache.camel.model.language.ConstantExpression']);
+    const expectedSchema = (schema.items as JSONSchema4).definitions as unknown as Record<string, JSONSchema4>;
+    expect(result).toEqual(expectedSchema['org.apache.camel.model.language.ConstantExpression']);
   });
 
   it('returns the same schema if no $ref is present', () => {
     const dSchema = { type: 'string' };
-    const result = parser.dereferenceSchema(dSchema);
+    const result = parser.dereferenceSchema(dSchema as JSONSchema4);
     expect(result).toEqual(dSchema);
   });
 
