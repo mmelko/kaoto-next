@@ -1,6 +1,4 @@
 import { JSONSchema4 } from 'json-schema';
-import { CamelComponentSchemaService } from '../../../models/visualization/flows/support/camel-component-schema.service';
-import { CamelCatalogService, CatalogKind } from '../../../models';
 import { capitalize, getAttributesFromSchema } from '../xml-utils';
 
 const expressionsSchemas: { [key: string]: string } = {
@@ -58,13 +56,84 @@ export class RouteXmlParser {
     };
   };
 
+  transformRouteConfiguration = (routeConfigElement: Element): any => {
+    const routeConfigSchema = this.schemaDefinitions[
+      'org.apache.camel.model.RouteConfigurationDefinition'
+    ] as JSONSchema4;
+    return {
+      ...getAttributesFromSchema(routeConfigElement, routeConfigSchema),
+      errorHandler: this.transformErrorHandler(routeConfigElement.getElementsByTagName('errorHandler')[0]),
+
+      intercept: Array.from(routeConfigElement.getElementsByTagName('intercept')).map(this.transformIntercepts),
+
+      interceptFrom: Array.from(routeConfigElement.getElementsByTagName('interceptFrom')).map(this.transformIntercepts),
+
+      interceptSendToEndpoint: Array.from(routeConfigElement.getElementsByTagName('interceptSendToEndpoint')).map(
+        this.transformIntercepts,
+      ),
+
+      onCompletion: this.transformOnCompletion(routeConfigElement.getElementsByTagName('onCompletion')[0]),
+
+      onException: Array.from(routeConfigElement.getElementsByTagName('onException')).map((onException) => ({
+        onException: this.transformOnException(onException),
+      })),
+    };
+  };
+
+  transformIntercepts = (interceptElement: Element): any => {
+    const interceptSchema = this.schemaDefinitions[
+      'org.apache.camel.model.' + capitalize(interceptElement.tagName) + 'Definition'
+    ] as JSONSchema4;
+    return {
+      [interceptElement.tagName]: {
+        ...getAttributesFromSchema(interceptElement, interceptSchema),
+        steps: this.transformSteps(interceptElement),
+      },
+    };
+  };
+  transformOnException = (onExceptionElement: Element): any => {
+    const onExceptionSchema = this.schemaDefinitions['org.apache.camel.model.OnExceptionDefinition'] as JSONSchema4;
+    const step = {
+      ...getAttributesFromSchema(onExceptionElement, onExceptionSchema),
+      exception: Array.from(onExceptionElement.getElementsByTagName('exception')).map(
+        (exception) => exception.textContent,
+      ),
+      handled: this.transformOptionalExpression(onExceptionElement, 'handled'),
+      continued: this.transformOptionalExpression(onExceptionElement, 'continued'),
+      steps: this.transformSteps(onExceptionElement), // Nested steps inside onException
+    };
+
+    return step;
+  };
+
+  transformErrorHandler = (errorHandlerElement: Element): any => {
+    if (!errorHandlerElement) return null;
+    const errorHandlerSchema = this.schemaDefinitions['org.apache.camel.model.ErrorHandlerDefinition'] as JSONSchema4;
+    return {
+      ...getAttributesFromSchema(errorHandlerElement, errorHandlerSchema),
+      steps: this.transformSteps(errorHandlerElement), // If any steps are inside errorHandler
+    };
+  };
+
+  transformOnCompletion = (onCompletionElement: Element): any => {
+    if (!onCompletionElement) return null;
+    const onCompletionSchema = this.schemaDefinitions['org.apache.camel.model.OnCompletionDefinition'] as JSONSchema4;
+    return {
+      ...getAttributesFromSchema(onCompletionElement, onCompletionSchema),
+      steps: this.transformSteps(onCompletionElement), // Process steps
+    };
+  };
+  transformOptionalExpression = (parentElement: Element, tagName: string): any => {
+    const expressionElement = parentElement.getElementsByTagName(tagName)[0]?.children[0];
+    return expressionElement ? this.transformExpression(expressionElement) : undefined;
+  };
+
   transformFrom = (fromElement: Element): any => {
     const fromSchema = this.schemaDefinitions['org.apache.camel.model.FromDefinition'] as JSONSchema4;
+    //const uri = fromElement.getAttribute('uri') ?? '';
+    //const component = CamelComponentSchemaService.getComponentNameFromUri(uri);
 
-    const uri = fromElement.getAttribute('uri') ?? '';
-    const component = CamelComponentSchemaService.getComponentNameFromUri(uri);
-    console.log('found component', component);
-    console.log(JSON.stringify(CamelCatalogService.getComponent(CatalogKind.Component, component)?.propertiesSchema));
+    // console.log(JSON.stringify(CamelCatalogService.getComponent(CatalogKind.Component, component)?.propertiesSchema));
     return {
       ...getAttributesFromSchema(fromElement, fromSchema),
       steps: this.transformSteps(fromElement.parentElement!),
@@ -114,7 +183,6 @@ export class RouteXmlParser {
     }
 
     const step = { ...getAttributesFromSchema(element, elementSchema) };
-    console.log('step', step);
 
     // If the schema has an 'expression' property, process the expression
     if (elementSchema.properties?.expression) {
@@ -137,14 +205,13 @@ export class RouteXmlParser {
 
   transformDoTry = (doTryElement: Element, doTrySchema: JSONSchema4): any => {
     const doCatchArray: any[] = [];
-    let doFinallyElement = null;
+    let doFinallyElement = undefined;
 
     Array.from(doTryElement.children).forEach((child) => {
       const tagNameLower = child.tagName;
 
       // Check if the element is a doCatch
       if (child.tagName === 'doCatch') {
-        console.log('doCatch', child);
         doCatchArray.push(this.transformDoCatch(child));
       }
       // Check if the element is a doFinally
@@ -170,7 +237,7 @@ export class RouteXmlParser {
 
     // Process the onWhen element if present
     const onWhenElement = doCatchElement.getElementsByTagName('onWhen')[0];
-    const onWhen = onWhenElement ? this.transformOnWhen(onWhenElement) : null;
+    const onWhen = onWhenElement ? this.transformOnWhen(onWhenElement) : undefined;
 
     return {
       ...getAttributesFromSchema(doCatchElement, doCatchSchema),
