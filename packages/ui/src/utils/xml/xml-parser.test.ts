@@ -16,8 +16,6 @@ describe('XmlParser', () => {
     parser = new XmlParser(schema);
   });
 
-  beforeEach(() => {});
-
   it('parses XML with a single route correctly', () => {
     const xml = `<routes><route><from uri="direct:start" /></route></routes>`;
     const result = parser.parseXML(xml);
