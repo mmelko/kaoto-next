@@ -53,7 +53,7 @@ export class XmlParser {
     // Process route entities
     const routes = processElements('route', this.routeXmlParser.transformRoute);
     if (routes.length > 0) {
-      rawEntities.push(...routes);
+      routes.forEach((r) => rawEntities.push({ route: r }));
     }
 
     // Process beans (bean factory)
