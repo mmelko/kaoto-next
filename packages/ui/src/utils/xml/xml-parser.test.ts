@@ -21,7 +21,9 @@ describe('XmlParser', () => {
     const result = parser.parseXML(xml);
     expect(result).toEqual([
       {
-        from: { uri: 'direct:start', steps: [] },
+        route: {
+          from: { uri: 'direct:start', steps: [] },
+        },
       },
     ]);
   });
@@ -30,9 +32,12 @@ describe('XmlParser', () => {
     const xml = `<routes><route id="test"><from uri="direct:first" /></route><route><from uri="direct:second" /></route></routes>`;
     const result = parser.parseXML(xml);
     expect(result).toEqual([
-      { id: 'test', from: { uri: 'direct:first', steps: [] } },
       {
-        from: { uri: 'direct:second', steps: [] },
+        route: { id: 'test', from: { uri: 'direct:first', steps: [] } }},
+      {
+        route: {
+          from: { uri: 'direct:second', steps: [] },
+        },
       },
     ]);
   });
