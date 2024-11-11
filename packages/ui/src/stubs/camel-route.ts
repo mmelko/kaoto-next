@@ -83,68 +83,69 @@ export const doTryCamelRouteXml =
   '  </doTry>\n' +
   '</route>';
 export const doTryCamelRouteJson = {
-  id: 'route-1137',
-  from: {
-    uri: 'direct:start',
-    steps: [
-      {
-        doTry: {
-          steps: [
-            {
-              process: {
-                ref: 'processorFail',
-              },
-            },
-            {
-              to: {
-                uri: 'mock:result',
-              },
-            },
-          ],
-          doCatch: [
-            {
-              id: 'first',
-              steps: [
-                {
-                  to: {
-                    uri: 'mock:catch',
-                  },
-                },
-              ],
-              exception: ['java.io.IOException', 'java.lang.IllegalStateException'],
-              onWhen: {
-                expression: {
-                  simple: {
-                    expression: "${exception.message} contains 'Damn'",
-                  },
-                },
-              },
-            },
-            {
-              id: 'second',
-              steps: [
-                {
-                  to: {
-                    uri: 'mock:catchCamel',
-                  },
-                },
-              ],
-              exception: ['org.apache.camel.CamelExchangeException'],
-              onWhen: null,
-            },
-          ],
-          doFinally: {
+  route: {
+    id: 'route-1137',
+    from: {
+      uri: 'direct:start',
+      steps: [
+        {
+          doTry: {
             steps: [
               {
+                process: {
+                  ref: 'processorFail',
+                },
+              },
+              {
                 to: {
-                  uri: 'mock:finally',
+                  uri: 'mock:result',
                 },
               },
             ],
+            doCatch: [
+              {
+                id: 'first',
+                steps: [
+                  {
+                    to: {
+                      uri: 'mock:catch',
+                    },
+                  },
+                ],
+                exception: ['java.io.IOException', 'java.lang.IllegalStateException'],
+                onWhen: {
+                  expression: {
+                    simple: {
+                      expression: "${exception.message} contains 'Damn'",
+                    },
+                  },
+                },
+              },
+              {
+                id: 'second',
+                steps: [
+                  {
+                    to: {
+                      uri: 'mock:catchCamel',
+                    },
+                  },
+                ],
+                exception: ['org.apache.camel.CamelExchangeException'],
+              },
+            ],
+            doFinally: {
+              steps: [
+                {
+                  to: {
+                    uri: 'mock:finally',
+                  },
+                },
+              ],
+            },
           },
         },
-      },
-    ],
+      ],
+    },
   },
 };
 export const camelRoute = new CamelRouteVisualEntity(camelRouteJson);
