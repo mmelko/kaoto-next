@@ -3,6 +3,7 @@ import { JSONSchema4 } from 'json-schema';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import catalogLibrary from '@kaoto/camel-catalog/index.json';
+import { XmlParser } from '../xml-parser';
 
 const getElementFromXml = (xml: string): Element => {
   const parser = new DOMParser();

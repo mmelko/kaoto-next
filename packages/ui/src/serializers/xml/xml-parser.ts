@@ -1,24 +1,31 @@
+/*
+ * Copyright (C) 2023 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { JSONSchema4 } from 'json-schema';
 import { RouteXmlParser } from './parsers/route-xml-parser';
 import { BeansXmlParser } from './parsers/beans-xml-parser';
 import { RestXmlParser } from './parsers/rest-xml-parser';
+import { CamelComponentSchemaService } from '../../models/visualization/flows/support/camel-component-schema.service';
 
-// function extractProperties(schema: JSONSchema4): Record<string, any> {
-//   if (schema.properties) {
-//     return schema.properties;
-//   }
-//   if (schema.oneOf || schema.anyOf) {
-//     const combinedSchemas = schema.oneOf || schema.anyOf || [];
-//     for (const subSchema of combinedSchemas) {
-//       if (subSchema.properties) {
-//         return subSchema.properties;
-//       }
-//     }
-//   }
-//   return {};
-// }
+export function isXML(code: unknown): boolean {
+  console.log('going to trim code', code);
+  if (typeof code !== 'string') {
+    return false;
+  }
 
-export function isXML(code: string): boolean {
   const trimmedCode = code.trim();
   return trimmedCode.startsWith('<') && trimmedCode.endsWith('>');
 }
