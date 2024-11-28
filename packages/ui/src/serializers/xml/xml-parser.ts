@@ -19,9 +19,9 @@ import { RouteXmlParser } from './parsers/route-xml-parser';
 import { BeansXmlParser } from './parsers/beans-xml-parser';
 import { RestXmlParser } from './parsers/rest-xml-parser';
 import { CamelComponentSchemaService } from '../../models/visualization/flows/support/camel-component-schema.service';
+import { ProcessorDefinition } from '@kaoto/camel-catalog/types';
 
 export function isXML(code: unknown): boolean {
-  console.log('going to trim code', code);
   if (typeof code !== 'string') {
     return false;
   }
@@ -45,7 +45,7 @@ export class XmlParser {
     // CamelComponentSchemaService.getProcessorStepsProperties();
   }
 
-  parseXML = (xml: string): any => {
+  parseXML = (xml: string): ProcessorDefinition => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xml, 'application/xml');
     const rootElement = xmlDoc.documentElement;

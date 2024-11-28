@@ -1,3 +1,4 @@
+import { isXML } from './xml/xml-parser';
 import { CamelResource } from '../models/camel';
 import { parse, stringify } from 'yaml';
 import { CamelResourceSerializer } from './camel-resource-serializer';
@@ -17,11 +18,8 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
   static readonly COMMENTED_LINES_REGEXP = /^\s*#.*$/;
   comments: string[] = [];
 
-  static isApplicable(_code: unknown): boolean {
-    //TODO
-    // return !isXML(code);
-
-    return true;
+  static isApplicable(code: unknown): boolean {
+    return !isXML(code);
   }
 
   parse(code: string): CamelYamlDsl | Integration | Kamelet | KameletBinding | Pipe {
