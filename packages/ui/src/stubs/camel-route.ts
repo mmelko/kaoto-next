@@ -148,4 +148,5 @@ export const doTryCamelRouteJson = {
     },
   },
 };
+
 export const camelRoute = new CamelRouteVisualEntity(camelRouteJson);

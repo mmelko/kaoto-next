@@ -1,10 +1,10 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { parse, stringify } from 'yaml';
-import { CamelResource, createCamelResource, sourceSchemaConfig, SourceSchemaType } from '../models/camel';
+
+import { CamelResource, SourceSchemaType } from '../models/camel';
 import { BaseCamelEntity } from '../models/camel/entities';
 import { BaseVisualCamelEntity } from '../models/visualization/base-visual-entity';
 import { EventNotifier } from '../utils';
-import { isXML, XmlParser } from '../utils/xml/xml-parser';
+import { CamelResourceFactory } from '../models/camel/camel-resource-factory';
 
 /**
  * Regular expression to match commented lines, regardless of indentation
@@ -16,7 +16,6 @@ import { isXML, XmlParser } from '../utils/xml/xml-parser';
  * ```
  * The regular expression should match the first three lines
  */
-const COMMENTED_LINES_REGEXP = /^\s*#.*$/;
 
 export interface EntitiesContextResult {
   entities: BaseCamelEntity[];
@@ -50,7 +49,7 @@ export interface EntitiesContextResult {
 
 export const useEntities = (): EntitiesContextResult => {
   const eventNotifier = EventNotifier.getInstance();
-  const [camelResource, setCamelResource] = useState<CamelResource>(createCamelResource());
+  const [camelResource, setCamelResource] = useState<CamelResource>(CamelResourceFactory.createCamelResource());
   const [entities, setEntities] = useState<BaseCamelEntity[]>([]);
   const [visualEntities, setVisualEntities] = useState<BaseVisualCamelEntity[]>([]);
 
@@ -59,30 +58,10 @@ export const useEntities = (): EntitiesContextResult => {
    */
   useLayoutEffect(() => {
     return eventNotifier.subscribe('code:updated', (code) => {
-      const lines = code.split('\n');
-      const comments: string[] = [];
-      for (const line of lines) {
-        if (line.trim() === '' || COMMENTED_LINES_REGEXP.test(line)) {
-          comments.push(line);
-        } else {
-          break;
-        }
-      }
-
-      let rawEntities;
-      if (isXML(code)) {
-        const schema = sourceSchemaConfig.config[SourceSchemaType.Route].schema;
-        if (schema) {
-          const xmlParser = new XmlParser(schema!.schema!);
-          rawEntities = xmlParser.parseXML(code);
-        }
-      } else {
-        rawEntities = parse(code);
-      }
-      const camelResource = createCamelResource(rawEntities);
-      camelResource.setComments(comments);
+      const camelResource = CamelResourceFactory.createCamelResource(code);
       const entities = camelResource.getEntities();
       const visualEntities = camelResource.getVisualEntities();
+
       setCamelResource(camelResource);
       setEntities(entities);
       setVisualEntities(visualEntities);
@@ -90,13 +69,7 @@ export const useEntities = (): EntitiesContextResult => {
   }, [eventNotifier]);
 
   const updateSourceCodeFromEntities = useCallback(() => {
-    let code = stringify(camelResource, { sortMapEntries: camelResource.sortFn, schema: 'yaml-1.1' }) || '';
-
-    if (camelResource.getComments().length > 0) {
-      const comments = camelResource.getComments().join('\n');
-      code = comments + '\n' + code;
-    }
-
+    const code = camelResource.toString();
     eventNotifier.next('entities:updated', code);
   }, [camelResource, eventNotifier]);
 
@@ -114,7 +87,7 @@ export const useEntities = (): EntitiesContextResult => {
 
   const setCurrentSchemaType = useCallback(
     (type: SourceSchemaType) => {
-      setCamelResource(createCamelResource(type));
+      setCamelResource(CamelResourceFactory.createCamelResource(type));
       updateEntitiesFromCamelResource();
     },
     [updateEntitiesFromCamelResource],
