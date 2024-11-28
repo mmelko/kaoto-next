@@ -25,7 +25,6 @@ export function isXML(code: unknown): boolean {
   if (typeof code !== 'string') {
     return false;
   }
-
   const trimmedCode = code.trim();
   return trimmedCode.startsWith('<') && trimmedCode.endsWith('>');
 }

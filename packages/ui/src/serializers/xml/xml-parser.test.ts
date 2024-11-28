@@ -21,6 +21,9 @@ import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { JSONSchema4 } from 'json-schema';
 import { doTryCamelRouteJson, doTryCamelRouteXml } from '../../stubs';
 import { beanWithConstructorAandProperties, beanWithConstructorAandPropertiesXML } from '../../stubs/beans';
+import { CamelResource, CamelRouteResource } from '../../models/camel';
+import { CamelRouteVisualEntity } from '../../models';
+import { formatXml } from './xml-utils';
 
 describe('XmlParser', () => {
   let parser: XmlParser;
@@ -96,5 +99,42 @@ describe('XmlParser', () => {
   it('parse beans correctly', () => {
     const result = parser.parseXML(beanWithConstructorAandPropertiesXML);
     expect(result).toEqual([beanWithConstructorAandProperties]);
+  });
+
+  describe('ToXMLConverter', () => {
+    let parser: XmlParser;
+    let schema: JSONSchema4;
+    const domParser = new DOMParser();
+    const xmlSerializer = new XMLSerializer();
+
+    beforeEach(async () => {
+      const cat = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
+      schema = await import(cat.catalogPath + cat.catalogDefinition.schemas['camelYamlDsl'].file);
+      parser = new XmlParser(schema);
+    });
+
+    it('Convert single route entity to XML correctly', () => {
+      const doc = domParser.parseFromString(
+        `<camel><routes><route id="route-1234"><from uri="direct:start"/></route></routes></camel>`,
+        'application/xml',
+      );
+
+      const entity = new CamelRouteResource([
+        {
+          route: {
+            from: { uri: 'direct:start', steps: [{ to: { uri: 'direct:end' } }] },
+          },
+        },
+      ]);
+
+      const result = parser.generateXmlDocument(entity);
+      console.log('result', formatXml(xmlSerializer.serializeToString(result)));
+      expect(xmlSerializer.serializeToString(result)).toEqual(xmlSerializer.serializeToString(doc));
+    });
+
+    it('converts to XML correctly', () => {
+      const result = xmlSerializer.serializeToString(parser.generateXmlDocument([doTryCamelRouteJson]));
+      expect(result).toEqual(doTryCamelRouteXml);
+    });
   });
 });
