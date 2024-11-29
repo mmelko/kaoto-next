@@ -4,6 +4,9 @@ import { parse, stringify } from 'yaml';
 import { CamelResourceSerializer } from './camel-resource-serializer';
 
 export class YamlCamelResourceSerializer implements CamelResourceSerializer {
+  getLabel(): string {
+    return 'YAML';
+  }
   COMMENTED_LINES_REGEXP = /^\s*#.*$/;
   comments: string[] = [];
 
