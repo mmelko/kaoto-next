@@ -39,6 +39,10 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
     return code;
   }
 
+  getLabel(): string {
+    return 'YAML';
+  }
+
   getComments(): string[] {
     return this.comments;
   }
@@ -63,5 +67,4 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
     }
     return comments;
   }
-
 }
