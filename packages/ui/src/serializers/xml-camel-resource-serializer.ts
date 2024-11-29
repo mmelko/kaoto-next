@@ -7,8 +7,8 @@ import { CamelResourceSerializer } from './camel-resource-serializer';
 import { CamelYamlDsl, Integration, Kamelet, KameletBinding, Pipe } from '@kaoto/camel-catalog/types';
 
 export class XmlCamelResourceSerializer implements CamelResourceSerializer {
-  static isApplicable(code: unknown): boolean {
-    return isXML(code as string);
+  getLabel(): string {
+    return 'XML';
   }
   xmlSerializer: XMLSerializer = new XMLSerializer();
   xmlConverter: XmlConverter;
