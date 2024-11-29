@@ -4,6 +4,16 @@ import { parse, stringify } from 'yaml';
 import { CamelResourceSerializer } from './camel-resource-serializer';
 
 export class YamlCamelResourceSerializer implements CamelResourceSerializer {
+  /**
+   * Regular expression to match commented lines, regardless of indentation
+   * Given the following examples, the regular expression should match the comments:
+   * ```
+   * # This is a comment
+   *     # This is an indented comment
+   *# This is an indented comment
+   * ```
+   * The regular expression should match the first three lines
+   */
   getLabel(): string {
     return 'YAML';
   }
@@ -15,7 +25,7 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
   }
 
   parse(code: string): unknown {
-    if (!code || typeof code !== 'string') return {};
+    if (!code || typeof code !== 'string') return [];
 
     this.comments = this.parseComments(code);
     const json = parse(code);
