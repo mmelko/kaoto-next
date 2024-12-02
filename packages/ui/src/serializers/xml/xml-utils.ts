@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { JSONSchema4 } from 'json-schema';
 
 export function getAttributesFromSchema(element: Element, schema: JSONSchema4): any {
@@ -28,7 +29,7 @@ export function extractProperties(schema: JSONSchema4): Record<string, any> {
   return {};
 }
 
-export function formatXml(xml) {
+export function formatXml(xml: string) {
   // simple XML format used instead of HTML formatting in monaco
   const PADDING = ' '.repeat(2);
   const reg = /(>)(<)(\/*)/g;

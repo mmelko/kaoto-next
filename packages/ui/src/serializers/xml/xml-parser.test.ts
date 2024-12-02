@@ -21,10 +21,6 @@ import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { JSONSchema4 } from 'json-schema';
 import { doTryCamelRouteJson, doTryCamelRouteXml } from '../../stubs';
 import { beanWithConstructorAandProperties, beanWithConstructorAandPropertiesXML } from '../../stubs/beans';
-import { CamelResource, CamelRouteResource } from '../../models/camel';
-import { CamelRouteVisualEntity } from '../../models';
-import { formatXml } from './xml-utils';
-import { XmlConverter } from './xml-converter';
 
 describe('XmlParser', () => {
   let parser: XmlParser;
