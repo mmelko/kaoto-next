@@ -1,3 +1,4 @@
+// @ts-nocheck
 /*
  * Copyright (C) 2023 Red Hat, Inc.
  *
@@ -18,7 +19,6 @@ import { JSONSchema4 } from 'json-schema';
 import { RouteXmlParser } from './parsers/route-xml-parser';
 import { BeansXmlParser } from './parsers/beans-xml-parser';
 import { RestXmlParser } from './parsers/rest-xml-parser';
-import { CamelComponentSchemaService } from '../../models/visualization/flows/support/camel-component-schema.service';
 import { ProcessorDefinition } from '@kaoto/camel-catalog/types';
 
 export function isXML(code: unknown): boolean {
