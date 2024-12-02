@@ -24,7 +24,7 @@ export class XmlConverter {
   createElementWithAttributesAndChildren = (elementName: string, elementData: any, doc: Document): Element => {
     const element = doc.createElement(elementName);
 
-    if (elementData.uri && elementData.parameters) {
+    if (elementData.uri) {
       element.setAttribute('uri', this.createUriFromParameters(elementData));
     }
 
@@ -62,7 +62,7 @@ export class XmlConverter {
   createUriFromParameters = (step: any): string => {
     const camelElementLookup = CamelComponentSchemaService.getCamelComponentLookup('from', step);
     if (camelElementLookup.componentName === undefined) {
-      return '';
+      return step.uri;
     }
 
     const catalogLookup = CamelCatalogService.getCatalogLookup(camelElementLookup.componentName);
@@ -89,7 +89,7 @@ export class XmlConverter {
         },
       );
     }
-    return '';
+    return step.uri;
   };
 
   convertToXmlDocument = (elementName: string, obj: any, doc: Document, parent?: Element): Element => {
@@ -159,7 +159,7 @@ export class XmlConverter {
     return expressionElement;
   };
 
-  generateXmlDocument = (camelResource: CamelResource): Document => {
+  generateXmlDocument = (entityDefinitions: { entityDef: any }[]): Document => {
     const parser = new DOMParser();
     const doc: XMLDocument = parser.parseFromString('<camel></camel>', 'text/xml');
     const rootElement = doc.documentElement;
@@ -168,30 +168,27 @@ export class XmlConverter {
     // const restConfigurationsElement = doc.createElement('restConfigurations');
     // const restsElement = doc.createElement('rests');
 
-    camelResource
-      .getVisualEntities()
-      .map((e) => e as unknown as { entityDef: any })
-      .forEach((entity) => {
-        const entityType = Object.keys(entity.entityDef)[0];
-        let element: Element;
+    entityDefinitions.forEach((entity) => {
+      const entityType = Object.keys(entity.entityDef)[0];
+      let element: Element;
 
-        // Append to the appropriate section based on type
-        switch (entityType) {
-          case 'route':
-            element = this.convertToXmlDocument('route', entity.entityDef[entityType], doc);
-            routesElement.appendChild(element);
-            break;
-          // case "restConfiguration":
-          //   restConfigurationsElement.appendChild(entityElement);
-          //   break;
-          // case "rest":
-          //   restsElement.appendChild(entityElement);
-          //   break;
-          // default:
-          //   // Handle any additional or unknown types if necessary
-          //   break;
-        }
-      });
+      // Append to the appropriate section based on type
+      switch (entityType) {
+        case 'route':
+          element = this.convertToXmlDocument('route', entity.entityDef[entityType], doc);
+          routesElement.appendChild(element);
+          break;
+        // case "restConfiguration":
+        //   restConfigurationsElement.appendChild(entityElement);
+        //   break;
+        // case "rest":
+        //   restsElement.appendChild(entityElement);
+        //   break;
+        // default:
+        //   // Handle any additional or unknown types if necessary
+        //   break;
+      }
+    });
 
     // Append non-empty sections to the <camel> root element
     if (routesElement.hasChildNodes()) rootElement.appendChild(routesElement);
