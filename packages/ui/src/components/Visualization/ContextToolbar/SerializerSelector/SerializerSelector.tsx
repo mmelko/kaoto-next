@@ -15,6 +15,7 @@ export const SerializerSelector: FunctionComponent = () => {
         serializer === 'XML' ? new XmlCamelResourceSerializer() : new YamlCamelResourceSerializer(),
       );
       updateSourceCodeFromEntities();
+      setIsOpen(false);
     }
   }
 
@@ -33,7 +34,7 @@ export const SerializerSelector: FunctionComponent = () => {
 
   return (
     <Select
-      id="dsl-list-select"
+      id="serializer-list-select"
       isOpen={isOpen}
       onSelect={(_event, value) => onSelect(value as string)}
       onOpenChange={(isOpen) => setIsOpen(isOpen)}
