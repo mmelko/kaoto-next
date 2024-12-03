@@ -7,12 +7,14 @@ import { EntitiesContext } from '../../providers/entities.provider';
 import { RedoButton } from './RedoButton';
 import './SourceCode.scss';
 import { UndoButton } from './UndoButton';
+import { SwitchFormatButton } from './SwitchFormatButton';
 import './workers/enable-workers';
 import { isXML } from '../../serializers/xml/xml-parser';
 
 interface SourceCodeProps {
   code: string;
   onCodeChange?: (code: string) => void;
+  handleFormatSwitch?: (format: 'xml' | 'yaml') => void;
 }
 
 export const SourceCode: FunctionComponent<SourceCodeProps> = (props) => {
@@ -77,8 +79,13 @@ export const SourceCode: FunctionComponent<SourceCodeProps> = (props) => {
     return [
       <UndoButton key="undo-button" isVisible onClick={undoAction} />,
       <RedoButton key="redo-button" isVisible onClick={redoAction} />,
+      <SwitchFormatButton
+        key="switch-format-button"
+        isVisible
+        onClick={() => props.handleFormatSwitch!(isXML(props.code) ? 'yaml' : 'xml')}
+      />,
     ];
-  }, []);
+  }, [props.code, props.handleFormatSwitch]);
 
   useEffect(() => {
     /**

@@ -12,10 +12,14 @@ import { EventNotifier } from '../utils';
 interface ISourceCodeApi {
   /** Set the Source Code and notify subscribers */
   setCodeAndNotify: (sourceCode: string) => void;
+  switchFormat: (format: 'xml' | 'yaml') => void;
 }
 
 export const SourceCodeContext = createContext<string>('');
-export const SourceCodeApiContext = createContext<ISourceCodeApi>({ setCodeAndNotify: () => {} });
+export const SourceCodeApiContext = createContext<ISourceCodeApi>({
+  setCodeAndNotify: () => {},
+  switchFormat: () => {},
+});
 
 export const SourceCodeProvider: FunctionComponent<PropsWithChildren> = (props) => {
   const eventNotifier = EventNotifier.getInstance();
@@ -35,11 +39,19 @@ export const SourceCodeProvider: FunctionComponent<PropsWithChildren> = (props) 
     [eventNotifier],
   );
 
+  const switchFormat = useCallback(
+    (format: 'xml' | 'yaml') => {
+      eventNotifier.next('format:switched', format);
+    },
+    [eventNotifier],
+  );
+
   const sourceCodeApi: ISourceCodeApi = useMemo(
     () => ({
       setCodeAndNotify,
+      switchFormat,
     }),
-    [setCodeAndNotify],
+    [setCodeAndNotify, switchFormat],
   );
 
   return (

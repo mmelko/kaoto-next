@@ -32,6 +32,7 @@ describe('NewFlow.tsx', () => {
       <SourceCodeApiContext.Provider
         value={{
           setCodeAndNotify: jest.fn(),
+          switchFormat: jest.fn(),
         }}
       >
         <EntitiesContext.Provider

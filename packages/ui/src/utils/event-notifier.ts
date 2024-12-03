@@ -1,6 +1,7 @@
 interface Events {
   'code:updated': string;
   'entities:updated': string;
+  'format:switched': string;
 }
 
 export class EventNotifier extends EventTarget {

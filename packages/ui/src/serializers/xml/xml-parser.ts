@@ -19,7 +19,8 @@ import { JSONSchema4 } from 'json-schema';
 import { RouteXmlParser } from './parsers/route-xml-parser';
 import { BeansXmlParser } from './parsers/beans-xml-parser';
 import { RestXmlParser } from './parsers/rest-xml-parser';
-import { ProcessorDefinition } from '@kaoto/camel-catalog/types';
+import { BeanFactory, ProcessorDefinition } from '@kaoto/camel-catalog/types';
+import { SourceSchemaType } from '../../models/camel/source-schema-config';
 
 export function isXML(code: unknown): boolean {
   if (typeof code !== 'string') {
@@ -35,11 +36,10 @@ export class XmlParser {
   beanParser: BeansXmlParser;
   restParser: RestXmlParser;
 
-  constructor(schema: JSONSchema4) {
-    this.schemaDefinitions = (schema.items as JSONSchema4).definitions as unknown as Record<string, JSONSchema4>;
-    this.routeXmlParser = new RouteXmlParser(this.schemaDefinitions);
-    this.beanParser = new BeansXmlParser(this.schemaDefinitions);
-    this.restParser = new RestXmlParser(this.schemaDefinitions);
+  constructor() {
+    this.routeXmlParser = new RouteXmlParser();
+    this.beanParser = new BeansXmlParser();
+    this.restParser = new RestXmlParser();
     // CamelComponentSchemaService.getComponentNameFromUri();
     // CamelComponentSchemaService.getProcessorStepsProperties();
   }
@@ -63,8 +63,8 @@ export class XmlParser {
     }
 
     // Process beans (bean factory)
-    const beansSection = routes.length > 1 ? xmlDoc.getElementsByTagName('beans')[0] : xmlDoc;
-    const beans = beansSection ? processElements('bean', this.beanParser.transformBeanFactory) : [];
+    const beansSection = xmlDoc.getElementsByTagName('beans')[0];
+    const beans: BeanFactory[] = beansSection ? this.beanParser.transformBeansSection(beansSection) : [];
     if (beans.length > 0) {
       rawEntities.push({ beans });
     }

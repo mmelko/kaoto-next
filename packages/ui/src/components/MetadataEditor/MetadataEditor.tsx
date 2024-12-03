@@ -1,4 +1,4 @@
-import { Split, SplitItem, Stack, StackItem, Title } from '@patternfly/react-core';
+import { Card, CardBody, Split, SplitItem, Stack, StackItem, Title } from '@patternfly/react-core';
 import { cloneDeep } from 'lodash';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { SchemaBridgeProvider } from '../../providers/schema-bridge.provider';
@@ -94,33 +94,41 @@ export const MetadataEditor = forwardRef<CustomAutoFormRef, MetadataEditorProps>
       {isTopmostArray() ? (
         <Split hasGutter>
           <SplitItem className="metadata-editor-modal-list-view">
-            <TopmostArrayTable
-              model={preparedModel !== null ? preparedModel : props.metadata}
-              itemSchema={getFormSchema()}
-              name={props.name}
-              selected={selected}
-              onSelected={setSelected}
-              onChangeModel={onChangeArrayModel}
-            />
+            <Card isFlat style={{ height: '100%', borderRadius: '15px' }}>
+              <CardBody>
+                <TopmostArrayTable
+                  model={preparedModel !== null ? preparedModel : props.metadata}
+                  itemSchema={getFormSchema()}
+                  name={props.name}
+                  selected={selected}
+                  onSelected={setSelected}
+                  onChangeModel={onChangeArrayModel}
+                />
+              </CardBody>
+            </Card>
           </SplitItem>
 
           <SplitItem className="metadata-editor-modal-details-view">
-            <Stack hasGutter>
-              <StackItem>
-                <Title headingLevel="h2">Details</Title>
-              </StackItem>
-              <StackItem isFilled>
-                <CustomAutoForm
-                  model={getFormModel()}
-                  onChangeModel={onChangeFormModel}
-                  data-testid={`metadata-editor-form-${props.name}`}
-                  disabled={isFormDisabled()}
-                  sortFields
-                  ref={fieldsRefs}
-                  handleConfirm={props.handleConfirm}
-                />
-              </StackItem>
-            </Stack>
+            <Card isFlat style={{ height: '100%', borderRadius: '15px' }}>
+              <CardBody>
+                <Stack hasGutter>
+                  <StackItem>
+                    <Title headingLevel="h2">Details</Title>
+                  </StackItem>
+                  <StackItem isFilled>
+                    <CustomAutoForm
+                      model={getFormModel()}
+                      onChangeModel={onChangeFormModel}
+                      data-testid={`metadata-editor-form-${props.name}`}
+                      disabled={isFormDisabled()}
+                      sortFields
+                      ref={fieldsRefs}
+                      handleConfirm={props.handleConfirm}
+                    />
+                  </StackItem>
+                </Stack>
+              </CardBody>
+            </Card>
           </SplitItem>
         </Split>
       ) : (

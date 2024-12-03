@@ -29,7 +29,7 @@ describe('XmlParser', () => {
   beforeEach(async () => {
     const cat = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
     schema = await import(cat.catalogPath + cat.catalogDefinition.schemas['camelYamlDsl'].file);
-    parser = new XmlParser(schema);
+    parser = new XmlParser();
   });
 
   it('parses XML with a single route correctly', () => {

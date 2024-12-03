@@ -14,5 +14,18 @@ export const SourceCodePage: FunctionComponent = () => {
     [sourceCodeApiContext],
   );
 
-  return <SourceCode code={sourceCodeContext ?? ''} onCodeChange={handleCodeChange} />;
+  const handleFormatSwitch = useCallback(
+    (format: 'xml' | 'yaml') => {
+      sourceCodeApiContext.switchFormat(format);
+    },
+    [sourceCodeApiContext],
+  );
+
+  return (
+    <SourceCode
+      code={sourceCodeContext ?? ''}
+      onCodeChange={handleCodeChange}
+      handleFormatSwitch={handleFormatSwitch}
+    />
+  );
 };

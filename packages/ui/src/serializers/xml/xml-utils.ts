@@ -1,35 +1,54 @@
 // @ts-nocheck
 import { JSONSchema4 } from 'json-schema';
 
-export function getAttributesFromSchema(element: Element, schema: JSONSchema4): any {
-  const attributes: { [key: string]: string } = {};
-  const properties = extractProperties(schema);
-
-  Object.keys(properties).forEach((key) => {
-    if (element.hasAttribute(key)) {
-      attributes[key] = element.getAttribute(key) as string;
-    }
-  });
+export function extractAttributes<T>(element: Element): Partial<T> {
+  const attributes = {} as Partial<T>;
+  for (let i = 0; i < element.attributes.length; i++) {
+    const attr = element.attributes[i];
+    attributes[attr.name as keyof T] = attr.value;
+  }
   return attributes;
 }
 
-export function extractProperties(schema: JSONSchema4): Record<string, any> {
-  if (schema.properties) {
-    return schema.properties;
+export function extractAttributesUntyped(element: Element): { [key: string]: unknown } {
+  const attributes: { [key: string]: string } = {};
+  for (let i = 0; i < element.attributes.length; i++) {
+    const attr = element.attributes[i];
+    attributes[attr.name] = attr.value;
   }
-
-  if (schema.oneOf || schema.anyOf) {
-    const combinedSchemas = schema.oneOf || schema.anyOf || [];
-    for (const subSchema of combinedSchemas) {
-      if (subSchema.properties) {
-        return subSchema.properties;
-      }
-    }
-  }
-  return {};
+  return attributes;
 }
 
-export function formatXml(xml: string) {
+// //I like it so far .. few hours of scratching my heand
+// export function getAttributesFromSchema(element: Element, schema: JSONSchema4): any {
+//   const attributes: { [key: string]: string } = {};
+//   const properties = extractProperties(schema);
+//
+//   Object.keys(properties).forEach((key) => {
+//     if (element.hasAttribute(key)) {
+//       attributes[key] = element.getAttribute(key) as string;
+//     }
+//   });
+//   return attributes;
+// }
+//
+// export function extractProperties(schema: JSONSchema4): Record<string, unknown> {
+//   if (schema.properties) {
+//     return schema.properties;
+//   }
+//
+//   if (schema.oneOf || schema.anyOf) {
+//     const combinedSchemas = schema.oneOf || schema.anyOf || [];
+//     for (const subSchema of combinedSchemas) {
+//       if (subSchema.properties) {
+//         return subSchema.properties;
+//       }
+//     }
+//   }
+//   return {};
+// }
+
+export function formatXml(xml: string): string {
   // simple XML format used instead of HTML formatting in monaco
   const PADDING = ' '.repeat(2);
   const reg = /(>)(<)(\/*)/g;

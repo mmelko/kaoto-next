@@ -5,6 +5,7 @@ import { BaseCamelEntity } from '../models/camel/entities';
 import { BaseVisualCamelEntity } from '../models/visualization/base-visual-entity';
 import { EventNotifier } from '../utils';
 import { CamelResourceFactory } from '../models/camel/camel-resource-factory';
+import { XmlCamelResourceSerializer, YamlCamelResourceSerializer } from '../serializers';
 
 export interface EntitiesContextResult {
   entities: BaseCamelEntity[];
@@ -56,6 +57,15 @@ export const useEntities = (): EntitiesContextResult => {
       setVisualEntities(visualEntities);
     });
   }, [eventNotifier]);
+
+  useLayoutEffect(() => {
+    return eventNotifier.subscribe('format:switched', (format) => {
+      const camelResourceSerializer =
+        format === 'xml' ? new XmlCamelResourceSerializer() : new YamlCamelResourceSerializer();
+      camelResource.setSerializer(camelResourceSerializer);
+      eventNotifier.next('entities:updated', camelResource.toString());
+    });
+  }, [camelResource, eventNotifier]);
 
   const updateSourceCodeFromEntities = useCallback(() => {
     const code = camelResource.toString();
