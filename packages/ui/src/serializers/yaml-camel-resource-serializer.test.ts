@@ -22,7 +22,6 @@ describe('YamlCamelResourceSerializer', () => {
 
   it('includes comments in serialized YAML string', () => {
     const entities = serializer.parse('# comment1\n' + camelRouteYaml);
-    console.log(serializer.comments);
     expect(serializer.comments.includes('# comment1')).toBeTruthy();
 
     serializer.comments.push('# Comment2');

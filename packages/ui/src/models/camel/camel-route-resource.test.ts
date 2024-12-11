@@ -1,6 +1,6 @@
 import { beansJson } from '../../stubs/beans';
 import { camelFromJson } from '../../stubs/camel-from';
-import { camelRouteJson, camelRouteYaml } from '../../stubs/camel-route';
+import { camelRouteJson, camelRouteWithComments, camelRouteWithCommentsString, camelRouteYaml } from '../../stubs/camel-route';
 import { AddStepMode } from '../visualization/base-visual-entity';
 import { CamelRouteVisualEntity } from '../visualization/flows/camel-route-visual-entity';
 import { NonVisualEntity } from '../visualization/flows/non-visual-entity';
@@ -212,6 +212,15 @@ describe('CamelRouteResource', () => {
       const resource = new CamelRouteResource(json);
       const firstEntity = resource.getVisualEntities()[0] ?? resource.getEntities()[0];
       expect(firstEntity.toJSON()).not.toBeUndefined();
+    });
+  });
+
+  describe('comments', () => {
+    it('should set and get comments', () => {
+      const resource = new CamelRouteResource(camelRouteWithCommentsString);
+      const serialized = resource.toString();
+
+      expect(serialized).toEqual(camelRouteWithCommentsString);
     });
   });
 });

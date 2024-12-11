@@ -48,13 +48,16 @@ export class CamelRouteResource implements CamelResource, BeansAwareResource {
   ) => number;
   private entities: BaseCamelEntity[] = [];
   private resolvedEntities: BaseVisualCamelEntityDefinition | undefined;
-  private serializer: CamelResourceSerializer;
 
-  constructor(code?: unknown, serializer?: CamelResourceSerializer) {
-    this.serializer = serializer ?? new YamlCamelResourceSerializer();
+  constructor(
+    protected code: string = '',
+    protected serializer: CamelResourceSerializer = new YamlCamelResourceSerializer(),
+  ) {
     if (!code) return;
 
-    const entities = Array.isArray(code) ? code : [code];
+    const rawEntities = this.serializer.parse(code);
+    const entities = Array.isArray(rawEntities) ? rawEntities : [rawEntities];
+
     this.entities = entities.reduce((acc, rawItem) => {
       const entity = this.getEntity(rawItem);
       if (isDefined(entity) && typeof entity === 'object') {
@@ -96,6 +99,7 @@ export class CamelRouteResource implements CamelResource, BeansAwareResource {
   getSerializer(): CamelResourceSerializer {
     return this.serializer;
   }
+
   setSerializer(serializer: CamelResourceSerializer): void {
     this.serializer = serializer;
   }

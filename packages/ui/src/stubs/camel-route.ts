@@ -1,4 +1,4 @@
-import { RouteDefinition } from '@kaoto/camel-catalog/types';
+import { CamelYamlDsl, RouteDefinition } from '@kaoto/camel-catalog/types';
 import { parse } from 'yaml';
 
 /**
@@ -57,3 +57,22 @@ route:
           uri: direct
           disabled: true
 `);
+
+export const camelRouteWithCommentsString = `
+  # This is a comment
+  # This is another comment
+
+- route:
+    id: route-8888
+    from:
+      uri: timer
+      steps:
+        - log:
+            disabled: true
+            message: \${body}
+        - to:
+            uri: direct
+            disabled: true
+`;
+
+export const camelRouteWithComments: CamelYamlDsl = parse(camelRouteWithCommentsString);

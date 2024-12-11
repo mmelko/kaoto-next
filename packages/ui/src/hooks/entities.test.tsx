@@ -64,9 +64,7 @@ describe('useEntities', () => {
     const { result } = renderHook(() => useEntities());
 
     act(() => {
-      console.log('result.current.camelResource:', result.current.camelResource);
       result.current.camelResource.addNewEntity();
-      console.log('result.current.camelResource:', result.current.camelResource);
       result.current.updateSourceCodeFromEntities();
     });
 

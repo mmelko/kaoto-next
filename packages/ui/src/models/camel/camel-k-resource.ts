@@ -26,14 +26,13 @@ export const CAMEL_K_K8S_API_VERSION_V1 = 'camel.apache.org/v1';
 
 export abstract class CamelKResource implements CamelResource {
   static readonly PARAMETERS_ORDER = ['apiVersion', 'kind', 'metadata', 'spec', 'source', 'steps', 'sink'];
-  // static serializer = new YamlResourceSerializer();
   readonly sortFn = createCamelPropertiesSorter(CamelKResource.PARAMETERS_ORDER) as (a: unknown, b: unknown) => number;
   protected resource: CamelKType;
-  private metadata?: MetadataEntity;
+  protected metadata?: MetadataEntity;
 
   constructor(
     parsedResource: unknown,
-    private readonly serializer: CamelResourceSerializer = new YamlCamelResourceSerializer(),
+    protected readonly serializer: CamelResourceSerializer = new YamlCamelResourceSerializer(),
   ) {
     if (parsedResource) {
       this.resource = parsedResource as CamelKType;
@@ -98,6 +97,7 @@ export abstract class CamelKResource implements CamelResource {
   getCompatibleComponents(_mode: AddStepMode, _visualEntityData: IVisualizationNodeData): TileFilter | undefined {
     return undefined;
   }
+
   getSerializer() {
     return this.serializer;
   }
