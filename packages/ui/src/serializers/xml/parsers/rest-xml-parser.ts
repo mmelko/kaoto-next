@@ -15,25 +15,42 @@
  */
 
 import { JSONSchema4 } from 'json-schema';
+import {
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  ResponseMessage,
+  Rest,
+  RestSecurity,
+  To,
+} from '@kaoto/camel-catalog/types';
+import { extractAttributes } from '../xml-utils';
 
 export class RestXmlParser {
   schemaDefinitions: Record<string, JSONSchema4>;
+  // readonly restTypes = {
+  //   get: Get,
+  //   post: Post,
+  // };
 
   constructor(schemaDefinitions: Record<string, JSONSchema4>) {
     this.schemaDefinitions = schemaDefinitions;
   }
 
   // Main transformation for <rest> elements
-  transformRest = (restElement: Element): any => {
+  transformRest = (restElement: Element): Rest => {
     return {
-      path: restElement.getAttribute('path'),
+      ...extractAttributes<Rest>(restElement),
       ...this.transformRestVerbs(restElement),
     };
   };
 
   // Transform verbs like <get>, <post>, etc.
-  transformRestVerbs = (restElement: Element): any => {
-    const verbs: { [key: string]: any } = {};
+  transformRestVerbs = (restElement: Element): Rest => {
+    const verbs: { [key: string]: unknown } = {};
     const verbNames = ['get', 'post', 'put', 'delete', 'patch', 'head'];
 
     // For each verb, look for its elements and transform them
@@ -47,68 +64,69 @@ export class RestXmlParser {
     return verbs; // Return the dynamically populated verbs object
   };
 
+  private extractAttributes = (verb: string, element: Element): Partial<Get | Post | Patch | Put | Delete> => {
+    switch (verb) {
+      case 'get':
+        return extractAttributes<Get>(element);
+      case 'post':
+        return extractAttributes<Post>(element);
+      case 'put':
+        return extractAttributes<Put>(element);
+      case 'delete':
+        return extractAttributes<Delete>(element);
+      case 'patch':
+        return extractAttributes<Patch>(element);
+    }
+    return {};
+  };
   // Transform each individual HTTP verb (get, post, etc.)
-  transformRestVerb = (verbElement: Element, verb: string): any => {
-    // Get the corresponding definition from the schema, e.g., GetDefinition for <get>
-    const verbSchemaKey = `org.apache.camel.model.rest.${this.capitalize(verb)}Definition`;
-    const verbSchema = this.schemaDefinitions[verbSchemaKey];
+  transformRestVerb = (verbElement: Element, verb: string): Get | Post | Patch | Put | Delete => {
+    const partial = this.extractAttributes(verb, verbElement);
 
     return {
-      ...this.getAttributesFromSchema(verbElement, verbSchema),
+      ...partial,
       to: this.transformTo(verbElement.getElementsByTagName('to')[0]),
-      params: this.transformParams(verbElement),
+      param: this.transformParams(verbElement),
       security: this.transformSecurity(verbElement), // New
-      responseMessages: this.transformResponseMessages(verbElement), // New
+      responseMessage: this.transformResponseMessages(verbElement), // New
     };
   };
 
   // Transform the <param> elements inside each verb
-  transformParams = (verbElement: Element): any[] => {
+  transformParams = (verbElement: Element): Param[] => {
     return Array.from(verbElement.getElementsByTagName('param')).map((paramElement) => ({
-      name: paramElement.getAttribute('name'),
-      type: paramElement.getAttribute('type'),
+      name: paramElement.getAttribute('name')!,
+      type: paramElement.getAttribute('type') as 'body' | 'formData' | 'header' | 'path' | 'query',
       required: paramElement.getAttribute('required') === 'true',
-      defaultValue: paramElement.getAttribute('defaultValue'),
+      defaultValue: paramElement.getAttribute('defaultValue') ?? undefined,
     }));
   };
 
   // Transform the <to> element inside each verb
-  transformTo = (toElement: Element): any => {
-    return toElement ? { uri: toElement.getAttribute('uri') } : null;
+  transformTo = (toElement: Element): To | undefined => {
+    return toElement ? extractAttributes<To>(toElement) : undefined;
   };
 
   // New: Transform <security> elements inside verbs
-  transformSecurity = (verbElement: Element): any[] => {
+  transformSecurity = (verbElement: Element): RestSecurity[] => {
     return Array.from(verbElement.getElementsByTagName('security')).map((securityElement) => {
       return {
         [securityElement.getAttribute('type')!]: {
           roles: securityElement.getAttribute('roles')?.split(',') || [],
         },
-      };
+      } as unknown as RestSecurity;
     });
   };
 
   // New: Transform <responseMessage> elements inside verbs
-  transformResponseMessages = (verbElement: Element): any[] => {
+  transformResponseMessages = (verbElement: Element): ResponseMessage[] => {
     return Array.from(verbElement.getElementsByTagName('responseMessage')).map((responseMessageElement) => ({
-      code: responseMessageElement.getAttribute('code'),
-      message: responseMessageElement.getAttribute('message'),
+      code: responseMessageElement.getAttribute('code') ?? undefined,
+      message: responseMessageElement.getAttribute('message') as string,
     }));
   };
 
   // Helper method to extract attributes from schema
-  getAttributesFromSchema = (element: Element, schema: JSONSchema4): any => {
-    const attributes: { [key: string]: string } = {};
-    const properties = schema.properties || {};
-
-    Object.keys(properties).forEach((key) => {
-      if (element.hasAttribute(key)) {
-        attributes[key] = element.getAttribute(key) as string;
-      }
-    });
-
-    return attributes;
-  };
 
   // Helper to capitalize the first letter of verbs like 'get' to 'Get'
   capitalize = (str: string): string => {

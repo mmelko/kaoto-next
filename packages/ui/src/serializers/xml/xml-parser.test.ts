@@ -15,26 +15,21 @@
  */
 
 import { XmlParser, isXML } from './xml-parser';
-import catalogLibrary from '@kaoto/camel-catalog/index.json';
-import { getFirstCatalogMap } from '../../stubs/test-load-catalog';
-import { CatalogLibrary } from '@kaoto/camel-catalog/types';
-import { JSONSchema4 } from 'json-schema';
 import { doTryCamelRouteJson, doTryCamelRouteXml } from '../../stubs';
 import { beanWithConstructorAandProperties, beanWithConstructorAandPropertiesXML } from '../../stubs/beans';
 
 describe('XmlParser', () => {
   let parser: XmlParser;
-  let schema: JSONSchema4;
 
   beforeEach(async () => {
-    const cat = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
-    schema = await import(cat.catalogPath + cat.catalogDefinition.schemas['camelYamlDsl'].file);
-    parser = new XmlParser(schema);
+    parser = new XmlParser();
   });
 
   it('parses XML with a single route correctly', () => {
-    const xml = `<routes><route><from uri="direct:start" /></route></routes>`;
+    const xml = `<camel><routes><route><from uri="direct:start" /></route></routes></camel>`;
     const result = parser.parseXML(xml);
+
+    expect(result).toBeDefined();
     expect(result).toEqual([
       {
         route: {
@@ -63,19 +58,6 @@ describe('XmlParser', () => {
     const xml = `<routes></routes>`;
     const result = parser.parseXML(xml);
     expect(result).toEqual([]);
-  });
-
-  it('dereferences schema correctly', () => {
-    const dSchema = { $ref: '#/items/definitions/org.apache.camel.model.language.ConstantExpression' };
-    const result = parser.dereferenceSchema(dSchema);
-    const expectedSchema = (schema.items as JSONSchema4).definitions as unknown as Record<string, JSONSchema4>;
-    expect(result).toEqual(expectedSchema['org.apache.camel.model.language.ConstantExpression']);
-  });
-
-  it('returns the same schema if no $ref is present', () => {
-    const dSchema = { type: 'string' };
-    const result = parser.dereferenceSchema(dSchema as JSONSchema4);
-    expect(result).toEqual(dSchema);
   });
 
   it('identifies valid XML correctly', () => {

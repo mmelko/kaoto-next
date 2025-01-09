@@ -13,8 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { JSONSchema4 } from 'json-schema';
-import { capitalize, getAttributesFromSchema } from '../xml-utils';
+import { extractAttributes, extractAttributesUntyped } from '../xml-utils';
+import {
+  Choice,
+  DoCatch,
+  DoFinally,
+  DoTry,
+  ErrorHandler,
+  ExpressionDefinition,
+  FromDefinition,
+  Intercept,
+  InterceptFrom,
+  InterceptSendToEndpoint,
+  OnCompletion,
+  OnException,
+  OnWhen,
+  Otherwise,
+  ProcessorDefinition,
+  RouteConfigurationDefinition,
+  RouteDefinition,
+  When1 as When,
+} from '@kaoto/camel-catalog/types';
+import { CamelComponentSchemaService } from '../../../models/visualization/flows/support/camel-component-schema.service';
 
 const expressionsSchemas: { [key: string]: string } = {
   constant: '#/items/definitions/org.apache.camel.model.language.ConstantExpression',
@@ -35,313 +55,294 @@ const expressionsSchemas: { [key: string]: string } = {
   method: '#/items/definitions/org.apache.camel.model.language.MethodCallExpression',
   datasonnet: '#/items/definitions/org.apache.camel.model.language.DatasonnetExpression',
   csimple: '#/items/definitions/org.apache.camel.model.language.CSimpleExpression',
+  xtokenize: '#/items/definitions/org.apache.camel.model.language.XTokenizeExpression',
 };
+
+type ProcessorDefinitionKey = keyof ProcessorDefinition;
+const processorKeys: ProcessorDefinitionKey[] = [
+  'aggregate',
+  'bean',
+  'doCatch',
+  'choice',
+  'circuitBreaker',
+  'claimCheck',
+  'convertBodyTo',
+  'convertHeaderTo',
+  'convertVariableTo',
+  'delay',
+  'dynamicRouter',
+  'enrich',
+  'filter',
+  'doFinally',
+  'idempotentConsumer',
+  'kamelet',
+  'loadBalance',
+  'log',
+  'loop',
+  'marshal',
+  'multicast',
+  'onFallback',
+  'otherwise',
+  'pausable',
+  'pipeline',
+  'policy',
+  'poll',
+  'pollEnrich',
+  'process',
+  'recipientList',
+  'removeHeader',
+  'removeHeaders',
+  'removeProperties',
+  'removeProperty',
+  'removeVariable',
+  'resequence',
+  'resumable',
+  'rollback',
+  'routingSlip',
+  'saga',
+  'sample',
+  'script',
+  'setBody',
+  'setExchangePattern',
+  'setHeader',
+  'setHeaders',
+  'setProperty',
+  'setVariable',
+  'setVariables',
+  'sort',
+  'split',
+  'step',
+  'stop',
+  'threads',
+  'throttle',
+  'throwException',
+  'to',
+  'toD',
+  'tokenizer',
+  'transacted',
+  'transform',
+  'doTry',
+  'unmarshal',
+  'validate',
+  'when',
+  'whenSkipSendToEndpoint',
+  'wireTap',
+  'serviceCall',
+];
 
 const expressionKeys = Object.keys(expressionsSchemas);
 
 export class RouteXmlParser {
-  schemaDefinitions: Record<string, JSONSchema4>;
-
-  constructor(schemaDefinitions: Record<string, JSONSchema4>) {
-    this.schemaDefinitions = schemaDefinitions;
-  }
-
-  public dereferenceSchema = (dSchema: JSONSchema4): JSONSchema4 => {
-    const definitions: Record<string, JSONSchema4> = this.schemaDefinitions;
-    if (dSchema.$ref) {
-      const refPath = dSchema.$ref.replace(/^#\/items\/definitions\//, '');
-      return definitions[refPath];
-    }
-    return dSchema;
-  };
-
-  dereferenceSchemaByRef = (ref: string): JSONSchema4 => {
-    const refPath = ref.replace(/^#\/items\/definitions\//, '');
-    return this.schemaDefinitions[refPath];
-  };
-
-  transformRoute = (routeElement: Element): any => {
-    const routeSchema = this.schemaDefinitions['org.apache.camel.model.RouteDefinition'];
-
+  transformRoute = (routeElement: Element): RouteDefinition => {
     const fromElement: Element = routeElement.getElementsByTagName('from')[0];
-    const from = this.transformFrom(fromElement);
+    const from = this.transformElementWithSteps<FromDefinition>(fromElement);
+    const routeDef = extractAttributes<RouteDefinition>(routeElement);
+
     return {
-      ...getAttributesFromSchema(routeElement, routeSchema),
-      from: from,
+      ...routeDef,
+      from: { ...from, steps: this.transformSteps(routeElement) },
     };
   };
 
-  transformRouteConfiguration = (routeConfigElement: Element): any => {
-    const routeConfigSchema = this.schemaDefinitions[
-      'org.apache.camel.model.RouteConfigurationDefinition'
-    ] as JSONSchema4;
+  transformRouteConfigurationElement = <T>(routeConfigElement: Element, elementName: string): { [key: string]: T } => {
     return {
-      ...getAttributesFromSchema(routeConfigElement, routeConfigSchema),
-      errorHandler: this.transformErrorHandler(routeConfigElement.getElementsByTagName('errorHandler')[0]),
+      [elementName]: this.transformElementWithSteps<T>(routeConfigElement),
+    };
+  };
 
-      intercept: Array.from(routeConfigElement.getElementsByTagName('intercept')).map(this.transformIntercepts),
+  transformRouteConfiguration = (routeConfigElement: Element): RouteConfigurationDefinition => {
+    const routeConfig = extractAttributes<RouteConfigurationDefinition>(routeConfigElement);
+    return {
+      ...routeConfig,
+      errorHandler: this.transformElementWithSteps<ErrorHandler>(
+        routeConfigElement.getElementsByTagName('errorHandler')[0],
+      ),
+      intercept: Array.from(routeConfigElement.getElementsByTagName('intercept')).map((element) =>
+        this.transformRouteConfigurationElement<Intercept>(element, 'intercept'),
+      ),
 
-      interceptFrom: Array.from(routeConfigElement.getElementsByTagName('interceptFrom')).map(this.transformIntercepts),
+      interceptFrom: Array.from(routeConfigElement.getElementsByTagName('interceptFrom')).map((element) =>
+        this.transformRouteConfigurationElement<InterceptFrom>(element, 'interceptFrom'),
+      ),
 
       interceptSendToEndpoint: Array.from(routeConfigElement.getElementsByTagName('interceptSendToEndpoint')).map(
-        this.transformIntercepts,
+        (element) =>
+          this.transformRouteConfigurationElement<InterceptSendToEndpoint>(element, 'interceptSendToEndpoint'),
       ),
 
-      onCompletion: this.transformOnCompletion(routeConfigElement.getElementsByTagName('onCompletion')[0]),
+      onCompletion: Array.from(routeConfigElement.getElementsByTagName('onCompletion')).map((element) =>
+        this.transformRouteConfigurationElement<OnCompletion>(element, 'onCompletion'),
+      ),
 
-      onException: Array.from(routeConfigElement.getElementsByTagName('onException')).map((onException) => ({
-        onException: this.transformOnException(onException),
-      })),
+      onException: Array.from(routeConfigElement.getElementsByTagName('onException')).map((onException) =>
+        this.transformRouteConfigurationElement<OnException>(onException, 'onException'),
+      ),
     };
   };
 
-  transformIntercepts = (interceptElement: Element): any => {
-    const interceptSchema = this.schemaDefinitions[
-      'org.apache.camel.model.' + capitalize(interceptElement.tagName) + 'Definition'
-    ] as JSONSchema4;
+  transformOnException = (onExceptionElement: Element): OnException => {
     return {
-      [interceptElement.tagName]: {
-        ...getAttributesFromSchema(interceptElement, interceptSchema),
-        steps: this.transformSteps(interceptElement),
-      },
-    };
-  };
-  transformOnException = (onExceptionElement: Element): any => {
-    const onExceptionSchema = this.schemaDefinitions['org.apache.camel.model.OnExceptionDefinition'] as JSONSchema4;
-    const step = {
-      ...getAttributesFromSchema(onExceptionElement, onExceptionSchema),
+      ...extractAttributes<OnException>(onExceptionElement),
       exception: Array.from(onExceptionElement.getElementsByTagName('exception')).map(
         (exception) => exception.textContent,
-      ),
+      ) as string[],
       handled: this.transformOptionalExpression(onExceptionElement, 'handled'),
       continued: this.transformOptionalExpression(onExceptionElement, 'continued'),
       steps: this.transformSteps(onExceptionElement), // Nested steps inside onException
     };
-
-    return step;
   };
 
-  transformErrorHandler = (errorHandlerElement: Element): any => {
-    if (!errorHandlerElement) return null;
-    const errorHandlerSchema = this.schemaDefinitions['org.apache.camel.model.ErrorHandlerDefinition'] as JSONSchema4;
-    return {
-      ...getAttributesFromSchema(errorHandlerElement, errorHandlerSchema),
-      steps: this.transformSteps(errorHandlerElement), // If any steps are inside errorHandler
-    };
-  };
-
-  transformOnCompletion = (onCompletionElement: Element): any => {
-    if (!onCompletionElement) return null;
-    const onCompletionSchema = this.schemaDefinitions['org.apache.camel.model.OnCompletionDefinition'] as JSONSchema4;
-    return {
-      ...getAttributesFromSchema(onCompletionElement, onCompletionSchema),
-      steps: this.transformSteps(onCompletionElement), // Process steps
-    };
-  };
-  transformOptionalExpression = (parentElement: Element, tagName: string): any => {
+  transformOptionalExpression = (parentElement: Element, tagName: string): ExpressionDefinition | undefined => {
     const expressionElement = parentElement.getElementsByTagName(tagName)[0]?.children[0];
     return expressionElement ? this.transformExpression(expressionElement) : undefined;
   };
 
-  transformFrom = (fromElement: Element): any => {
-    const fromSchema = this.schemaDefinitions['org.apache.camel.model.FromDefinition'] as JSONSchema4;
-    //const uri = fromElement.getAttribute('uri') ?? '';
-    //const component = CamelComponentSchemaService.getComponentNameFromUri(uri);
-
-    // console.log(JSON.stringify(CamelCatalogService.getComponent(CatalogKind.Component, component)?.propertiesSchema));
-    return {
-      ...getAttributesFromSchema(fromElement, fromSchema),
-      steps: this.transformSteps(fromElement.parentElement!),
-    };
-  };
-
-  transformSteps = (parentElement: Element): any[] => {
-    const allowedSteps: {
-      [key: string]: any;
-    } = this.schemaDefinitions['org.apache.camel.model.ProcessorDefinition'].properties!;
-
+  transformSteps = (parentElement: Element): ProcessorDefinition[] => {
     return Array.from(parentElement.children)
       .filter((child) => {
-        const tagNameLower = child.tagName.toLowerCase();
-        const stepKey = Object.keys(allowedSteps).find((key) => key.toLowerCase() === tagNameLower);
-        return stepKey && !['doCatch', 'doFinally'].includes(stepKey); // Filter out elements not needed
+        const stepKey = child.tagName as ProcessorDefinitionKey;
+        return processorKeys.includes(stepKey) && !['doCatch', 'doFinally'].includes(stepKey); // Filter out elements not needed
       })
       .map((child) => {
-        let stepSchema = allowedSteps[child.tagName!]; // `!` asserts that stepKey is not null/undefined
-
-        // Dereference the schema if it's a reference
-        if (stepSchema.$ref) {
-          stepSchema = this.dereferenceSchema(stepSchema);
-        }
-
-        const step: any = {};
-        step[child.tagName] = this.transformElement(child, stepSchema);
+        const step: ProcessorDefinition = {
+          [child.tagName as keyof ProcessorDefinition]: this.transformElement(child),
+        };
         return step;
       });
   };
 
-  transformElement = (element: Element, elementSchema?: JSONSchema4): any => {
-    if (!elementSchema) {
-      // Handle primitive type
-      return element.textContent;
-    }
+  transformElementWithSteps = <T>(element: Element): T => {
+    return {
+      ...extractAttributes<T>(element),
+      steps: this.transformSteps(element),
+    } as T;
+  };
 
-    const tagNameLower = element.tagName ? element.tagName : (element as unknown as string);
-    if (tagNameLower === 'doTry') {
-      return this.transformDoTry(element, elementSchema);
-    } else if (['unmarshal', 'marshal'].includes(tagNameLower)) {
+  transformElement = (element: Element): unknown => {
+    // if (element.textContent !== null) {
+    //   return element.textContent;
+    // }
+
+    const processorName = (
+      element.tagName ? element.tagName : (element as unknown as string)
+    ) as ProcessorDefinitionKey;
+
+    if (processorName === 'doTry') {
+      return this.transformDoTry(element);
+    } else if (['unmarshal', 'marshal'].includes(processorName)) {
       return this.transformWithDataformat(element);
-    } else if (tagNameLower === 'choice') {
-      return this.transformChoice(element, elementSchema);
-    } else if (['unmarshal', 'marshal'].includes(tagNameLower)) {
-      return this.transformWithDataformat(element);
+    } else if (processorName === 'choice') {
+      return this.transformChoice(element);
     }
 
-    const step = { ...getAttributesFromSchema(element, elementSchema) };
+    const processorProperties = CamelComponentSchemaService.getProcessorStepsProperties(processorName);
+    let step = { ...extractAttributesUntyped(element) } as { [key: string]: unknown };
 
-    // If the schema has an 'expression' property, process the expression
-    if (elementSchema.properties?.expression) {
-      const expressionElement = Array.from(element.children).find((child) =>
-        expressionKeys.includes(child.tagName.toLowerCase()),
-      );
+    // if the step has an expression, find the expression element and transform it
+    const expressionElement = Array.from(element.children).find((child) =>
+      expressionKeys.includes(child.tagName.toLowerCase()),
+    );
 
-      if (expressionElement) {
-        step['expression'] = this.transformExpression(expressionElement);
-      }
+    if (expressionElement) {
+      step = { ...step, expression: this.transformExpression(expressionElement) };
     }
 
-    // find property in the schema that is type of array
-    if (elementSchema.properties?.steps) {
+    if (processorProperties.length === 1 && processorProperties[0].name === 'steps') {
       step['steps'] = this.transformSteps(element); // Call transformSteps on the element
     }
 
     return step;
   };
 
-  transformDoTry = (doTryElement: Element, doTrySchema: JSONSchema4): any => {
-    const doCatchArray: any[] = [];
+  transformDoTry = (doTryElement: Element): DoTry => {
+    const doCatchArray: DoCatch[] = [];
     let doFinallyElement = undefined;
 
     Array.from(doTryElement.children).forEach((child) => {
       const tagNameLower = child.tagName;
-
-      // Check if the element is a doCatch
       if (child.tagName === 'doCatch') {
         doCatchArray.push(this.transformDoCatch(child));
-      }
-      // Check if the element is a doFinally
-      else if (tagNameLower === 'doFinally') {
-        doFinallyElement = this.transformDoFinally(child);
+      } else if (tagNameLower === 'doFinally') {
+        doFinallyElement = this.transformElementWithSteps<DoFinally>(child);
       }
     });
 
     return {
-      ...getAttributesFromSchema(doTryElement, doTrySchema),
+      ...extractAttributes<DoTry>(doTryElement),
       steps: this.transformSteps(doTryElement), // All other steps except doCatch and doFinally
-      doCatch: doCatchArray, // Processed doCatch elements
-      doFinally: doFinallyElement, // Processed doFinally element if present
+      doCatch: doCatchArray,
+      doFinally: doFinallyElement,
     };
   };
 
-  transformDoCatch = (doCatchElement: Element): any => {
-    const doCatchSchema = this.schemaDefinitions['org.apache.camel.model.CatchDefinition'] as JSONSchema4;
-
+  transformDoCatch = (doCatchElement: Element): DoCatch => {
     // Process exceptions
     const exceptionElements = Array.from(doCatchElement.getElementsByTagName('exception'));
-    const exceptions = exceptionElements.map((exceptionElement) => exceptionElement.textContent);
+    const exceptions = exceptionElements
+      .map((exceptionElement) => exceptionElement.textContent)
+      .filter((e) => e !== null);
 
     // Process the onWhen element if present
     const onWhenElement = doCatchElement.getElementsByTagName('onWhen')[0];
     const onWhen = onWhenElement ? this.transformOnWhen(onWhenElement) : undefined;
 
     return {
-      ...getAttributesFromSchema(doCatchElement, doCatchSchema),
+      ...extractAttributes<DoCatch>(doCatchElement),
       exception: exceptions, // Capture the exceptions
       onWhen: onWhen, // Capture onWhen if available
       steps: this.transformSteps(doCatchElement), // Process steps inside doCatch
     };
   };
 
-  transformDoFinally = (doFinallyElement: Element): any => {
-    const doFinallySchema = this.schemaDefinitions['org.apache.camel.model.FinallyDefinition'];
-    return {
-      ...getAttributesFromSchema(doFinallyElement, doFinallySchema),
-      steps: this.transformSteps(doFinallyElement), // Process the steps inside doFinally
-    };
-  };
-
-  transformOnWhen = (onWhenElement: Element): any => {
-    const onWhenSchema = this.schemaDefinitions['org.apache.camel.model.WhenDefinition'];
+  transformOnWhen = (onWhenElement: Element): OnWhen => {
     const expressionElement = Array.from(onWhenElement.children).find((child) => {
       return expressionKeys.includes(child.tagName.toLowerCase()); // Check if it's an expression
     });
 
     return {
-      ...getAttributesFromSchema(onWhenElement, onWhenSchema),
+      ...extractAttributes<OnWhen>(onWhenElement),
       expression: expressionElement ? this.transformExpression(expressionElement) : null, // Transform expression if available
     };
   };
 
-  transformExpression = (expressionElement: Element): any => {
+  transformExpression = (expressionElement: Element): ExpressionDefinition => {
     const expressionType = expressionElement.tagName;
-    const expressionSchema = this.dereferenceSchemaByRef(expressionsSchemas[expressionType]);
-    const expressionAttributes = getAttributesFromSchema(expressionElement, expressionSchema);
+    const expressionAttributes = extractAttributesUntyped(expressionElement);
 
     return {
       [expressionType]: { expression: expressionElement.textContent, ...expressionAttributes },
-    };
+    } as ExpressionDefinition;
   };
-  transformChoice = (choiceElement: Element, choiceSchema: JSONSchema4): any => {
+
+  transformChoice = (choiceElement: Element): Choice => {
     const whenElements = Array.from(choiceElement.getElementsByTagName('when'));
     const otherwiseElement = choiceElement.getElementsByTagName('otherwise')[0];
 
     return {
-      ...getAttributesFromSchema(choiceElement, choiceSchema),
+      ...extractAttributes<Choice>(choiceElement),
       when: whenElements.map(this.transformWhen),
-      otherwise: otherwiseElement ? this.transformOtherwise(otherwiseElement) : null,
+      otherwise: otherwiseElement ? this.transformElementWithSteps<Otherwise>(otherwiseElement) : undefined,
     };
   };
 
-  transformOtherwise = (otherwiseElement: Element): any => {
-    const otherwiseSchema = this.schemaDefinitions['org.apache.camel.model.OtherwiseDefinition']
-      .properties as unknown as JSONSchema4;
-    return {
-      ...getAttributesFromSchema(otherwiseElement, otherwiseSchema),
-      steps: this.transformSteps(otherwiseElement),
-    };
-  };
-
-  transformWhen = (whenElement: Element): any => {
-    const whenSchema: JSONSchema4 = this.schemaDefinitions['org.apache.camel.model.WhenDefinition']
-      .properties as unknown as JSONSchema4;
+  transformWhen = (whenElement: Element): When => {
     const expressionElement = Array.from(whenElement.children).find((child) => {
-      return expressionKeys.includes(child.tagName.toLowerCase()); // Check if it's an expression
+      return expressionKeys.includes(child.tagName); // Check if it's an expression
     });
 
     return {
-      ...getAttributesFromSchema(whenElement, whenSchema),
+      ...this.transformElementWithSteps<When>(whenElement),
       expression: expressionElement ? this.transformExpression(expressionElement) : null, // Call transformExpression
-      steps: this.transformSteps(whenElement), // Continue transforming steps if any
     };
   };
 
-  transformWithDataformat = (unmarshalElement: Element): any => {
+  transformWithDataformat = (unmarshalElement: Element): unknown => {
     const dataFormatElement = unmarshalElement.children[0];
 
     if (!dataFormatElement) return {};
-
-    // Check if there's a definition for this specific data format (e.g., json, xml, etc.)
-    const dataFormatKey = `org.apache.camel.model.dataformat.${capitalize(dataFormatElement.tagName)}DataFormat`;
-    const dataFormatSchema = this.schemaDefinitions[dataFormatKey];
-
-    if (!dataFormatSchema) {
-      console.warn(`Data format ${dataFormatElement.tagName} is not defined in schema.`);
-      return {};
-    }
-
     return {
       [dataFormatElement.tagName]: {
-        ...getAttributesFromSchema(dataFormatElement, dataFormatSchema),
+        ...extractAttributesUntyped(dataFormatElement),
       },
     };
   };

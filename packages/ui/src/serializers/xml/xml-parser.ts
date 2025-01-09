@@ -19,7 +19,15 @@ import { JSONSchema4 } from 'json-schema';
 import { RouteXmlParser } from './parsers/route-xml-parser';
 import { BeansXmlParser } from './parsers/beans-xml-parser';
 import { RestXmlParser } from './parsers/rest-xml-parser';
-import { ProcessorDefinition } from '@kaoto/camel-catalog/types';
+import {
+  BeanFactory,
+  ErrorHandler,
+  Intercept,
+  InterceptSendToEndpoint,
+  OnCompletion,
+  ProcessorDefinition,
+} from '@kaoto/camel-catalog/types';
+import { SourceSchemaType } from '../../models/camel/source-schema-config';
 
 export function isXML(code: unknown): boolean {
   if (typeof code !== 'string') {
@@ -35,16 +43,15 @@ export class XmlParser {
   beanParser: BeansXmlParser;
   restParser: RestXmlParser;
 
-  constructor(schema: JSONSchema4) {
-    this.schemaDefinitions = (schema.items as JSONSchema4).definitions as unknown as Record<string, JSONSchema4>;
-    this.routeXmlParser = new RouteXmlParser(this.schemaDefinitions);
-    this.beanParser = new BeansXmlParser(this.schemaDefinitions);
-    this.restParser = new RestXmlParser(this.schemaDefinitions);
+  constructor() {
+    this.routeXmlParser = new RouteXmlParser();
+    this.beanParser = new BeansXmlParser();
+    this.restParser = new RestXmlParser();
     // CamelComponentSchemaService.getComponentNameFromUri();
     // CamelComponentSchemaService.getProcessorStepsProperties();
   }
 
-  parseXML = (xml: string): ProcessorDefinition => {
+  parseXML = (xml: string): any[] => {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xml, 'application/xml');
     const rootElement = xmlDoc.documentElement;
@@ -52,6 +59,7 @@ export class XmlParser {
     const rawEntities: any[] = [];
 
     // Helper function to process elements by tag name
+    //TOTO chyba
     const processElements = (tagName: string, transformer: (element: Element) => any): any[] => {
       return Array.from(xmlDoc.getElementsByTagName(tagName)).map(transformer);
     };
@@ -60,11 +68,12 @@ export class XmlParser {
     const routes = processElements('route', this.routeXmlParser.transformRoute);
     if (routes.length > 0) {
       routes.forEach((r) => rawEntities.push({ route: r }));
+      console.log(routes, rawEntities);
     }
 
     // Process beans (bean factory)
-    const beansSection = routes.length > 1 ? xmlDoc.getElementsByTagName('beans')[0] : xmlDoc;
-    const beans = beansSection ? processElements('bean', this.beanParser.transformBeanFactory) : [];
+    const beansSection = xmlDoc.getElementsByTagName('beans')[0];
+    const beans: BeanFactory[] = beansSection ? this.beanParser.transformBeansSection(beansSection) : [];
     if (beans.length > 0) {
       rawEntities.push({ beans });
     }
@@ -84,42 +93,52 @@ export class XmlParser {
       rawEntities.push(...routeConfigurations);
     }
 
+    //todo check root level
     // Helper to process root-level child elements (intercept, errorHandler, onCompletion, etc.)
     const processRootChildren = (parent: Element, tagName: string, transformer: (element: Element) => any): any[] => {
-      return Array.from(parent.children)
-        .filter((child) => child.tagName === tagName)
-        .map(transformer);
+      const childs = Array.from(parent.children).filter((child) => child.tagName === tagName);
+      if (childs.length > 0) {
+        return childs.map(transformer);
+      } else {
+        return [];
+      }
     };
 
     // Process root-level intercepts, errorHandlers, and onCompletions as children of the root
-    const intercepts = processRootChildren(rootElement, 'intercept', this.routeXmlParser.transformIntercepts);
+    const intercepts = processRootChildren(rootElement, 'intercept', (element) => {
+      return this.routeXmlParser.transformRouteConfigurationElement<Intercept>(element, 'intercept');
+    });
 
     if (intercepts.length > 0) {
       rawEntities.push(...intercepts);
     }
-    const interceptsFrom = processRootChildren(rootElement, 'interceptFrom', this.routeXmlParser.transformIntercepts);
+    const interceptsFrom = processRootChildren(rootElement, (element) => {
+      return this.routeXmlParser.transformRouteConfigurationElement<InterceptFrom>(element, 'interceptFrom');
+    });
+
     if (interceptsFrom.length > 0) {
       rawEntities.push(...interceptsFrom);
     }
-    const interceptsSendToEndpoint = processRootChildren(
-      rootElement,
-      'interceptSendToEndpoint',
-      this.routeXmlParser.transformIntercepts,
-    );
+    const interceptsSendToEndpoint = processRootChildren(rootElement, 'interceptSendToEndpoint', (element) => {
+      return this.routeXmlParser.transformRouteConfigurationElement<InterceptSendToEndpoint>(
+        element,
+        'interceptSendToEndpoint',
+      );
+    });
     if (interceptsSendToEndpoint.length > 0) {
       rawEntities.push(...interceptsSendToEndpoint);
     }
 
     const errorHandlers = processRootChildren(rootElement, 'errorHandler', (errorHandler) => ({
-      errorHandler: this.routeXmlParser.transformErrorHandler(errorHandler),
+      errorHandler: this.routeXmlParser.transformElementWithSteps<ErrorHandler>(errorHandler),
     }));
     if (errorHandlers.length > 0) {
       rawEntities.push(...errorHandlers);
     }
 
-    const onCompletions = processRootChildren(rootElement, 'onCompletion', (onCompletion) => ({
-      onCompletion: this.routeXmlParser.transformOnCompletion(onCompletion),
-    }));
+    const onCompletions = processRootChildren(rootElement, 'onCompletion', (onCompletion) => {
+      return this.routeXmlParser.transformRouteConfigurationElement<OnCompletion>(onCompletion, 'onCompletion');
+    });
     if (onCompletions.length > 0) {
       rawEntities.push(...onCompletions);
     }
