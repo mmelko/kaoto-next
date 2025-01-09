@@ -200,19 +200,16 @@ export class XmlConverter {
     // const restsElement = doc.createElement('rests');
 
     entityDefinitions.forEach((entity) => {
-      console.log('entity', entity.type);
       const entityType = entity.type;
       let element: Element;
 
       // Append to the appropriate section based on type
       switch (entityType) {
         case 'route':
-          console.log('route', entity.entityDef['route']);
           element = this.convertToXmlDocument('route', entity.entityDef[entityType], doc);
           routesElement.appendChild(element);
           break;
         case 'beans':
-          console.log('beans', entity);
           entity.parent.beans.forEach((bean) => {
             element = this.convertToXmlDocument('bean', bean, doc);
             beans.appendChild(element);

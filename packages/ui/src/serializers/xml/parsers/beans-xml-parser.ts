@@ -79,7 +79,6 @@ export class BeansXmlParser {
   transformBeansSection = (beansSection: Element): BeanFactory[] => {
     // Process all bean elements and populate beanFactories
     this.beans = [];
-    console.log('beanElements', beansSection);
     const beanElements = Array.from(beansSection.children);
 
     beanElements.forEach((beanElement) => {

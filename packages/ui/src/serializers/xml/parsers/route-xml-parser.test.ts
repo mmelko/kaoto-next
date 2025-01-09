@@ -15,7 +15,7 @@
  */
 
 import { RouteXmlParser } from './route-xml-parser';
-import { OnCompletion } from '@kaoto/camel-catalog/types';
+import { Intercept, InterceptFrom, InterceptSendToEndpoint, OnCompletion } from '@kaoto/camel-catalog/types';
 
 const getElementFromXml = (xml: string): Element => {
   const parser = new DOMParser();
@@ -37,7 +37,7 @@ describe('RouteXmlParser', () => {
       </when>
       <to uri="mock:intercepted"/>
   </intercept>`);
-    const result = parser.transformIntercepts(interceptElement);
+    const result = parser.transformRouteConfigurationElement<Intercept>(interceptElement, 'intercept');
     expect(result).toEqual({
       intercept: {
         id: 'intercept1',
@@ -64,7 +64,7 @@ describe('RouteXmlParser', () => {
     const interceptFromElement = getElementFromXml(`<interceptFrom id="interceptFrom1" uri="jms*">
     <to uri="log:incoming"/>
   </interceptFrom>`);
-    const result = parser.transformIntercepts(interceptFromElement);
+    const result = parser.transformRouteConfigurationElement<InterceptFrom>(interceptFromElement, 'interceptFrom');
     expect(result).toEqual({
       interceptFrom: {
         id: 'interceptFrom1',
@@ -81,7 +81,10 @@ describe('RouteXmlParser', () => {
       </interceptSendToEndpoint>
     `);
 
-    const result = parser.transformIntercepts(interceptSendToEndpointElement);
+    const result = parser.transformRouteConfigurationElement<InterceptSendToEndpoint>(
+      interceptSendToEndpointElement,
+      'interceptSendToEndpoint',
+    );
     expect(result).toEqual({
       interceptSendToEndpoint: {
         uri: 'kafka*',

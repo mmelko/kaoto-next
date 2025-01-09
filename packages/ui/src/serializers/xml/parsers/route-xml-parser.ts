@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//ts-nocheck
 import { extractAttributes, extractAttributesUntyped } from '../xml-utils';
 import {
   Choice,
@@ -138,10 +137,16 @@ export class RouteXmlParser {
     const fromElement: Element = routeElement.getElementsByTagName('from')[0];
     const from = this.transformElementWithSteps<FromDefinition>(fromElement);
     const routeDef = extractAttributes<RouteDefinition>(routeElement);
-    console.log('routeDef', routeDef);
+
     return {
       ...routeDef,
-      from: from as FromDefinition,
+      from: { ...from, steps: this.transformSteps(routeElement) },
+    };
+  };
+
+  transformRouteConfigurationElement = <T>(routeConfigElement: Element, elementName: string): { [key: string]: T } => {
+    return {
+      [elementName]: this.transformElementWithSteps<T>(routeConfigElement),
     };
   };
 
@@ -152,26 +157,26 @@ export class RouteXmlParser {
       errorHandler: this.transformElementWithSteps<ErrorHandler>(
         routeConfigElement.getElementsByTagName('errorHandler')[0],
       ),
-      intercept: Array.from(routeConfigElement.getElementsByTagName('intercept')).map((element) => ({
-        intercept: this.transformElementWithSteps<Intercept>(element),
-      })),
-
-      interceptFrom: Array.from(routeConfigElement.getElementsByTagName('interceptFrom')).map((element) => ({
-        interceptFrom: this.transformElementWithSteps<InterceptFrom>(element),
-      })),
-
-      interceptSendToEndpoint: Array.from(routeConfigElement.getElementsByTagName('interceptSendToEndpoint')).map(
-        (element) => ({
-          interceptSendToEndpoint: this.transformElementWithSteps<InterceptSendToEndpoint>(element),
-        }),
+      intercept: Array.from(routeConfigElement.getElementsByTagName('intercept')).map((element) =>
+        this.transformRouteConfigurationElement<Intercept>(element, 'intercept'),
       ),
 
-      onCompletion: Array.from(routeConfigElement.getElementsByTagName('onCompletion')).map((element) => ({
-        onCompletion: this.transformElementWithSteps<OnCompletion>(element),
-      })),
-      onException: Array.from(routeConfigElement.getElementsByTagName('onException')).map((onException) => ({
-        onException: this.transformOnException(onException),
-      })),
+      interceptFrom: Array.from(routeConfigElement.getElementsByTagName('interceptFrom')).map((element) =>
+        this.transformRouteConfigurationElement<InterceptFrom>(element, 'interceptFrom'),
+      ),
+
+      interceptSendToEndpoint: Array.from(routeConfigElement.getElementsByTagName('interceptSendToEndpoint')).map(
+        (element) =>
+          this.transformRouteConfigurationElement<InterceptSendToEndpoint>(element, 'interceptSendToEndpoint'),
+      ),
+
+      onCompletion: Array.from(routeConfigElement.getElementsByTagName('onCompletion')).map((element) =>
+        this.transformRouteConfigurationElement<OnCompletion>(element, 'onCompletion'),
+      ),
+
+      onException: Array.from(routeConfigElement.getElementsByTagName('onException')).map((onException) =>
+        this.transformRouteConfigurationElement<OnException>(onException, 'onException'),
+      ),
     };
   };
 
@@ -193,7 +198,6 @@ export class RouteXmlParser {
   };
 
   transformSteps = (parentElement: Element): ProcessorDefinition[] => {
-    // camelSchemaService.getProcessorStepsProperties();
     return Array.from(parentElement.children)
       .filter((child) => {
         const stepKey = child.tagName as ProcessorDefinitionKey;
@@ -266,8 +270,8 @@ export class RouteXmlParser {
     return {
       ...extractAttributes<DoTry>(doTryElement),
       steps: this.transformSteps(doTryElement), // All other steps except doCatch and doFinally
-      doCatch: doCatchArray, // Processed doCatch elements
-      doFinally: doFinallyElement, // Processed doFinally element if present
+      doCatch: doCatchArray,
+      doFinally: doFinallyElement,
     };
   };
 
