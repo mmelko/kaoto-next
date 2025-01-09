@@ -15,7 +15,6 @@
  */
 
 import { XmlConverter } from './xml-converter';
-import { formatXml } from './xml-utils';
 
 describe('ToXMLConverter', () => {
   const converter: XmlConverter = new XmlConverter();
@@ -29,18 +28,16 @@ describe('ToXMLConverter', () => {
       'application/xml',
     );
 
-    const entity = [
-      {
-        entityDef: {
-          route: {
-            from: { uri: 'direct:start', steps: [{ to: { uri: 'direct:end' } }] },
-          },
+    const entity = {
+      type: 'route',
+      entityDef: {
+        route: {
+          from: { uri: 'direct:start', steps: [{ to: { uri: 'direct:end' } }] },
         },
       },
-    ];
+    };
 
-    const result = converter.generateXmlDocument(entity);
-    console.log('result', formatXml(xmlSerializer.serializeToString(result)));
+    const result = converter.generateXmlDocument([entity]);
     expect(xmlSerializer.serializeToString(result)).toEqual(xmlSerializer.serializeToString(doc));
   });
 });

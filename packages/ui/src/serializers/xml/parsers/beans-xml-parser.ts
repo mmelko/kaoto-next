@@ -14,33 +14,25 @@
  * limitations under the License.
  */
 
-import { getAttributesFromSchema } from '../xml-utils';
-import { JSONSchema4 } from 'json-schema';
+import { extractAttributes } from '../xml-utils';
+import { BeanFactory } from '@kaoto/camel-catalog/types';
 
 export class BeansXmlParser {
-  schemaDefinitions: JSONSchema4;
+  beans: BeanFactory[] = [];
 
-  constructor(schemaDefinitions: Record<string, any>) {
-    this.schemaDefinitions = schemaDefinitions;
-  }
-
-  transformBeanFactory = (beanElement: Element): any => {
-    const beanSchema = this.schemaDefinitions['org.apache.camel.model.BeanFactoryDefinition'];
-
+  private transformBeanFactory = (beanElement: Element): BeanFactory => {
     // Initialize the bean object
-    let bean: any = {};
+    const bean: BeanFactory = extractAttributes<BeanFactory>(beanElement) as BeanFactory;
 
-    bean = getAttributesFromSchema(beanElement, beanSchema);
-    console.log('bean', getAttributesFromSchema(beanElement, beanSchema));
     // Special case for 'name/id' and 'type/class'
     const name = beanElement.getAttribute('id');
     if (name) {
-      bean['name'] = name;
+      bean.name = name;
     }
 
     const type = beanElement.getAttribute('class');
     if (type) {
-      bean['type'] = type;
+      bean.type = type;
     }
 
     const constructorsElement = beanElement.getElementsByTagName('constructors')[0];
@@ -65,6 +57,9 @@ export class BeansXmlParser {
       let properties: { [key: string]: string } = {};
 
       Array.from(beanElement.getElementsByTagName('properties')[0].children).forEach((propertyElement) => {
+        if (propertyElement.hasChildNodes()) {
+          //
+        }
         const propName = propertyElement.getAttribute('key') || propertyElement.getAttribute('name');
         const propValue = propertyElement.getAttribute('value') || propertyElement.getAttribute('ref');
 
@@ -79,5 +74,18 @@ export class BeansXmlParser {
     }
 
     return bean;
+  };
+
+  transformBeansSection = (beansSection: Element): BeanFactory[] => {
+    // Process all bean elements and populate beanFactories
+    this.beans = [];
+    const beanElements = Array.from(beansSection.children);
+
+    beanElements.forEach((beanElement) => {
+      const processedBean = this.transformBeanFactory(beanElement);
+      this.beans.push(processedBean);
+    });
+
+    return this.beans;
   };
 }

@@ -15,10 +15,7 @@
  */
 
 import { RouteXmlParser } from './route-xml-parser';
-import { JSONSchema4 } from 'json-schema';
-import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
-import { CatalogLibrary } from '@kaoto/camel-catalog/types';
-import catalogLibrary from '@kaoto/camel-catalog/index.json';
+import { Intercept, InterceptFrom, InterceptSendToEndpoint, OnCompletion } from '@kaoto/camel-catalog/types';
 
 const getElementFromXml = (xml: string): Element => {
   const parser = new DOMParser();
@@ -28,13 +25,9 @@ const getElementFromXml = (xml: string): Element => {
 
 describe('RouteXmlParser', () => {
   let parser: RouteXmlParser;
-  let schemaDefinitions: Record<string, JSONSchema4>;
 
   beforeEach(async () => {
-    const cat = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
-    const schema = await import(cat.catalogPath + cat.catalogDefinition.schemas['camelYamlDsl'].file);
-    schemaDefinitions = (schema.items as JSONSchema4).definitions as unknown as Record<string, JSONSchema4>;
-    parser = new RouteXmlParser(schemaDefinitions);
+    parser = new RouteXmlParser();
   });
 
   it('transforms intercept element correctly', () => {
@@ -44,7 +37,7 @@ describe('RouteXmlParser', () => {
       </when>
       <to uri="mock:intercepted"/>
   </intercept>`);
-    const result = parser.transformIntercepts(interceptElement);
+    const result = parser.transformRouteConfigurationElement<Intercept>(interceptElement, 'intercept');
     expect(result).toEqual({
       intercept: {
         id: 'intercept1',
@@ -71,7 +64,7 @@ describe('RouteXmlParser', () => {
     const interceptFromElement = getElementFromXml(`<interceptFrom id="interceptFrom1" uri="jms*">
     <to uri="log:incoming"/>
   </interceptFrom>`);
-    const result = parser.transformIntercepts(interceptFromElement);
+    const result = parser.transformRouteConfigurationElement<InterceptFrom>(interceptFromElement, 'interceptFrom');
     expect(result).toEqual({
       interceptFrom: {
         id: 'interceptFrom1',
@@ -88,7 +81,10 @@ describe('RouteXmlParser', () => {
       </interceptSendToEndpoint>
     `);
 
-    const result = parser.transformIntercepts(interceptSendToEndpointElement);
+    const result = parser.transformRouteConfigurationElement<InterceptSendToEndpoint>(
+      interceptSendToEndpointElement,
+      'interceptSendToEndpoint',
+    );
     expect(result).toEqual({
       interceptSendToEndpoint: {
         uri: 'kafka*',
@@ -129,7 +125,7 @@ describe('RouteXmlParser', () => {
     </onCompletion>
   `);
 
-    const result = parser.transformOnCompletion(onCompletionElement);
+    const result = parser.transformElementWithSteps<OnCompletion>(onCompletionElement);
     expect(result).toEqual({
       steps: [{ to: { uri: 'mock:completion' } }],
     });
@@ -148,7 +144,7 @@ describe('RouteXmlParser', () => {
     </choice>
   `);
 
-    const result = parser.transformChoice(choiceElement, schemaDefinitions['org.apache.camel.model.ChoiceDefinition']);
+    const result = parser.transformChoice(choiceElement);
     expect(result).toEqual({
       when: [
         {
@@ -176,7 +172,7 @@ describe('RouteXmlParser', () => {
     </doTry>
   `);
 
-    const result = parser.transformDoTry(doTryElement, schemaDefinitions['org.apache.camel.model.TryDefinition']);
+    const result = parser.transformDoTry(doTryElement);
     expect(result).toEqual({
       steps: [{ to: { uri: 'mock:try' } }],
       doCatch: [

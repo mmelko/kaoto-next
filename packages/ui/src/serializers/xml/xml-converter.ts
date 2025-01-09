@@ -18,6 +18,7 @@
 import { CamelComponentSchemaService } from '../../models/visualization/flows/support/camel-component-schema.service';
 import { CamelCatalogService, CatalogKind } from '../../models';
 import { CamelUriHelper, ParsedParameters } from '../../utils/camel-uri-helper';
+import { BeansEntity } from '../../models/visualization/metadata';
 
 export class XmlConverter {
   // General helper for creating elements with nested structure
@@ -130,10 +131,19 @@ export class XmlConverter {
       // parse object cases
       else if (typeof value === 'object' && key !== 'parameters') {
         let childElement;
-        if (key === 'expression') {
-          childElement = this.convertExpressionToXml(value, doc);
-        } else {
-          childElement = this.convertToXmlDocument(key, value, doc, parent);
+        switch (key) {
+          case 'expression':
+            childElement = this.convertExpressionToXml(value, doc);
+            break;
+          case 'properties':
+            childElement = this.convertPropertiesToXml(value, doc);
+            break;
+          case 'constructors':
+            childElement = this.convertConstructorsToXml(value, doc);
+            break;
+          default:
+            childElement = this.convertToXmlDocument(key, value, doc, parent);
+            break;
         }
         element.appendChild(childElement!);
       }
@@ -158,18 +168,39 @@ export class XmlConverter {
     }
     return expressionElement;
   };
+  convertPropertiesToXml = (properties: any, doc: Document): Element => {
+    const propertiesElement = doc.createElement('properties');
+    for (const [key, value] of Object.entries(properties)) {
+      const propertyElement = doc.createElement('property');
+      propertyElement.setAttribute('key', key);
+      propertyElement.setAttribute('value', value);
+      propertiesElement.appendChild(propertyElement);
+    }
+    return propertiesElement;
+  };
 
-  generateXmlDocument = (entityDefinitions: { entityDef: any }[]): Document => {
+  convertConstructorsToXml = (constructors: any, doc: Document): Element => {
+    const constructorsElement = doc.createElement('constructors');
+    for (const [key, value] of Object.entries(constructors)) {
+      const constructorElement = doc.createElement('constructor');
+      constructorElement.setAttribute('index', key);
+      constructorElement.setAttribute('value', value);
+      constructorsElement.appendChild(constructorElement);
+    }
+    return constructorsElement;
+  };
+  generateXmlDocument = (entityDefinitions: CamelBaseEntity[]): Document => {
     const parser = new DOMParser();
     const doc: XMLDocument = parser.parseFromString('<camel></camel>', 'text/xml');
     const rootElement = doc.documentElement;
 
     const routesElement = doc.createElement('routes');
+    const beans = doc.createElement('beans');
     // const restConfigurationsElement = doc.createElement('restConfigurations');
     // const restsElement = doc.createElement('rests');
 
     entityDefinitions.forEach((entity) => {
-      const entityType = Object.keys(entity.entityDef)[0];
+      const entityType = entity.type;
       let element: Element;
 
       // Append to the appropriate section based on type
@@ -177,6 +208,12 @@ export class XmlConverter {
         case 'route':
           element = this.convertToXmlDocument('route', entity.entityDef[entityType], doc);
           routesElement.appendChild(element);
+          break;
+        case 'beans':
+          entity.parent.beans.forEach((bean) => {
+            element = this.convertToXmlDocument('bean', bean, doc);
+            beans.appendChild(element);
+          });
           break;
         // case "restConfiguration":
         //   restConfigurationsElement.appendChild(entityElement);
@@ -192,6 +229,7 @@ export class XmlConverter {
 
     // Append non-empty sections to the <camel> root element
     if (routesElement.hasChildNodes()) rootElement.appendChild(routesElement);
+    if (beans.hasChildNodes()) rootElement.appendChild(beans);
     // if (restConfigurationsElement.hasChildNodes()) doc.getRootNode().appendChild(restConfigurationsElement);
     // if (restsElement.hasChildNodes()) doc.getRootNode().appendChild(restsElement);
     return doc;
