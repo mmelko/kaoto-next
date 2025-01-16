@@ -19,34 +19,18 @@ export function extractAttributesUntyped(element: Element): { [key: string]: unk
   return attributes;
 }
 
-// //I like it so far .. few hours of scratching my heand
-// export function getAttributesFromSchema(element: Element, schema: JSONSchema4): any {
-//   const attributes: { [key: string]: string } = {};
-//   const properties = extractProperties(schema);
-//
-//   Object.keys(properties).forEach((key) => {
-//     if (element.hasAttribute(key)) {
-//       attributes[key] = element.getAttribute(key) as string;
-//     }
-//   });
-//   return attributes;
-// }
-//
-// export function extractProperties(schema: JSONSchema4): Record<string, unknown> {
-//   if (schema.properties) {
-//     return schema.properties;
-//   }
-//
-//   if (schema.oneOf || schema.anyOf) {
-//     const combinedSchemas = schema.oneOf || schema.anyOf || [];
-//     for (const subSchema of combinedSchemas) {
-//       if (subSchema.properties) {
-//         return subSchema.properties;
-//       }
-//     }
-//   }
-//   return {};
-// }
+export function collectNamespaces(element: Element): [{ key: string; value: string }] {
+  let namespaces: [{ key: string; value: string }] = [];
+
+  Array.from(element.attributes).forEach((attr) => {
+    if (attr.name.startsWith('xmlns')) {
+      const ns = attr.name.split(':');
+      namespaces.push({ key: ns[1], value: attr.value });
+    }
+  });
+  if (element.parentElement) namespaces = [...collectNamespaces(element.parentElement), ...namespaces];
+  return namespaces;
+}
 
 export function formatXml(xml: string): string {
   // simple XML format used instead of HTML formatting in monaco
