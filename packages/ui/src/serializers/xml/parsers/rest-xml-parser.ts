@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { JSONSchema4 } from 'json-schema';
 import {
   Delete,
   Get,
@@ -30,16 +29,6 @@ import {
 import { extractAttributes } from '../xml-utils';
 
 export class RestXmlParser {
-  schemaDefinitions: Record<string, JSONSchema4>;
-  // readonly restTypes = {
-  //   get: Get,
-  //   post: Post,
-  // };
-
-  constructor(schemaDefinitions: Record<string, JSONSchema4>) {
-    this.schemaDefinitions = schemaDefinitions;
-  }
-
   // Main transformation for <rest> elements
   transformRest = (restElement: Element): Rest => {
     return {

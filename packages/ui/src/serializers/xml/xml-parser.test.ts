@@ -14,12 +14,21 @@
  * limitations under the License.
  */
 
+import catalogLibrary from '@kaoto/camel-catalog/index.json';
 import { XmlParser, isXML } from './xml-parser';
 import { doTryCamelRouteJson, doTryCamelRouteXml } from '../../stubs';
 import { beanWithConstructorAandProperties, beanWithConstructorAandPropertiesXML } from '../../stubs/beans';
+import { getFirstCatalogMap } from '../../stubs/test-load-catalog';
+import { CatalogLibrary } from '@kaoto/camel-catalog/types';
+import { CamelCatalogService, CatalogKind } from '../../models';
 
 describe('XmlParser', () => {
   let parser: XmlParser;
+
+  beforeAll(async () => {
+    const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
+    CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
+  });
 
   beforeEach(async () => {
     parser = new XmlParser();

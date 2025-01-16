@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+import catalogLibrary from '@kaoto/camel-catalog/index.json';
 import { RouteXmlParser } from './route-xml-parser';
-import { Intercept, InterceptFrom, InterceptSendToEndpoint, OnCompletion } from '@kaoto/camel-catalog/types';
+import { CatalogLibrary } from '@kaoto/camel-catalog/types';
+import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
+import { CamelCatalogService, CatalogKind } from '../../../models';
+import { XmlParser } from '../xml-parser';
 
 const getElementFromXml = (xml: string): Element => {
   const parser = new DOMParser();
@@ -25,6 +28,10 @@ const getElementFromXml = (xml: string): Element => {
 
 describe('RouteXmlParser', () => {
   let parser: RouteXmlParser;
+  beforeAll(async () => {
+    const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
+    CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
+  });
 
   beforeEach(async () => {
     parser = new RouteXmlParser();
@@ -37,14 +44,13 @@ describe('RouteXmlParser', () => {
       </when>
       <to uri="mock:intercepted"/>
   </intercept>`);
-    const result = parser.transformRouteConfigurationElement<Intercept>(interceptElement, 'intercept');
+    const result = parser.transformRouteConfigurationElement(interceptElement, 'intercept');
     expect(result).toEqual({
       intercept: {
         id: 'intercept1',
         steps: [
           {
             when: {
-              steps: [],
               expression: {
                 simple: {
                   expression: "${in.body} contains 'Hello'",
@@ -64,7 +70,7 @@ describe('RouteXmlParser', () => {
     const interceptFromElement = getElementFromXml(`<interceptFrom id="interceptFrom1" uri="jms*">
     <to uri="log:incoming"/>
   </interceptFrom>`);
-    const result = parser.transformRouteConfigurationElement<InterceptFrom>(interceptFromElement, 'interceptFrom');
+    const result = parser.transformRouteConfigurationElement(interceptFromElement, 'interceptFrom');
     expect(result).toEqual({
       interceptFrom: {
         id: 'interceptFrom1',
@@ -81,10 +87,7 @@ describe('RouteXmlParser', () => {
       </interceptSendToEndpoint>
     `);
 
-    const result = parser.transformRouteConfigurationElement<InterceptSendToEndpoint>(
-      interceptSendToEndpointElement,
-      'interceptSendToEndpoint',
-    );
+    const result = parser.transformRouteConfigurationElement(interceptSendToEndpointElement, 'interceptSendToEndpoint');
     expect(result).toEqual({
       interceptSendToEndpoint: {
         uri: 'kafka*',
@@ -110,7 +113,7 @@ describe('RouteXmlParser', () => {
     </onException>
   `);
 
-    const result = parser.transformOnException(onExceptionElement);
+    const result = parser.transformElement(onExceptionElement);
     expect(result).toEqual({
       exception: ['java.lang.Exception'],
       handled: { constant: { expression: 'true' } },
@@ -125,7 +128,7 @@ describe('RouteXmlParser', () => {
     </onCompletion>
   `);
 
-    const result = parser.transformElementWithSteps<OnCompletion>(onCompletionElement);
+    const result = parser.transformElement(onCompletionElement);
     expect(result).toEqual({
       steps: [{ to: { uri: 'mock:completion' } }],
     });
@@ -144,7 +147,7 @@ describe('RouteXmlParser', () => {
     </choice>
   `);
 
-    const result = parser.transformChoice(choiceElement);
+    const result = parser.transformElement(choiceElement);
     expect(result).toEqual({
       when: [
         {
@@ -172,7 +175,7 @@ describe('RouteXmlParser', () => {
     </doTry>
   `);
 
-    const result = parser.transformDoTry(doTryElement);
+    const result = parser.transformElement(doTryElement);
     expect(result).toEqual({
       steps: [{ to: { uri: 'mock:try' } }],
       doCatch: [
@@ -185,5 +188,75 @@ describe('RouteXmlParser', () => {
         steps: [{ to: { uri: 'mock:finally' } }],
       },
     });
+  });
+
+  it('transforms xpath with namespaces set', () => {
+    const parser = new XmlParser();
+    const namespaceDocument = new DOMParser().parseFromString(
+      `
+  <camel xmlns:ns1="n1">
+    <routes xmlns:ns2="n2" >
+    <route xmlns:ns3="n3" >
+    <from uri="direct:one"/>
+    <choice>
+    <when>
+      <xpath>/ns1:foo/</xpath>
+      <to uri="mock:bar"/>
+    </when>
+    </choice>
+    </route>
+</routes>
+</camel>  
+  `,
+      'application/xml',
+    );
+
+    const result = parser.parseFromXmlDocument(namespaceDocument);
+    expect(result).toEqual([
+      {
+        route: {
+          from: {
+            steps: [
+              {
+                choice: {
+                  when: [
+                    {
+                      expression: {
+                        xpath: {
+                          expression: '/ns1:foo/',
+                          namespace: [
+                            {
+                              key: 'ns1',
+                              value: 'n1',
+                            },
+                            {
+                              key: 'ns2',
+                              value: 'n2',
+                            },
+                            {
+                              key: 'ns3',
+                              value: 'n3',
+                            },
+                          ],
+                        },
+                      },
+                      steps: [
+                        {
+                          to: {
+                            uri: 'mock:bar',
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            ],
+            uri: 'direct:one',
+          },
+          'xmlns:ns3': 'n3',
+        },
+      },
+    ]);
   });
 });
