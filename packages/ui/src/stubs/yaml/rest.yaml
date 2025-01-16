@@ -1,0 +1,23 @@
+- rest:
+    get:
+      - param: []
+        path: /hello
+        responseMessage: []
+        security: []
+        to:
+          uri: direct:hello
+      - consumes: application/json
+        param: []
+        path: /bye
+        responseMessage: []
+        security: []
+        to:
+          uri: direct:bye
+    path: /say
+    post:
+      - param: []
+        path: /bye
+        responseMessage: []
+        security: []
+        to:
+          uri: mock:update
