@@ -192,46 +192,27 @@ export class XmlConverter {
   generateXmlDocument = (entityDefinitions: CamelBaseEntity[]): Document => {
     const parser = new DOMParser();
     const doc: XMLDocument = parser.parseFromString('<camel></camel>', 'text/xml');
+    doc.sch;
     const rootElement = doc.documentElement;
-
-    const routesElement = doc.createElement('routes');
     const beans = doc.createElement('beans');
-    // const restConfigurationsElement = doc.createElement('restConfigurations');
-    // const restsElement = doc.createElement('rests');
 
     entityDefinitions.forEach((entity) => {
       const entityType = entity.type;
       let element: Element;
 
-      // Append to the appropriate section based on type
-      switch (entityType) {
-        case 'route':
-          element = this.convertToXmlDocument('route', entity.entityDef[entityType], doc);
-          routesElement.appendChild(element);
-          break;
-        case 'beans':
-          entity.parent.beans.forEach((bean) => {
-            element = this.convertToXmlDocument('bean', bean, doc);
-            beans.appendChild(element);
-          });
-          break;
-        // case "restConfiguration":
-        //   restConfigurationsElement.appendChild(entityElement);
-        //   break;
-        // case "rest":
-        //   restsElement.appendChild(entityElement);
-        //   break;
-        // default:
-        //   // Handle any additional or unknown types if necessary
-        //   break;
+      if (entityType === 'beans') {
+        entity.parent.beans.forEach((bean) => {
+          element = this.convertToXmlDocument('bean', bean, doc);
+          beans.appendChild(element);
+        });
+      } else {
+        element = this.convertToXmlDocument(entityType, entity.entityDef[entityType], doc);
+        rootElement.appendChild(element);
       }
+      2;
     });
 
-    // Append non-empty sections to the <camel> root element
-    if (routesElement.hasChildNodes()) rootElement.appendChild(routesElement);
     if (beans.hasChildNodes()) rootElement.appendChild(beans);
-    // if (restConfigurationsElement.hasChildNodes()) doc.getRootNode().appendChild(restConfigurationsElement);
-    // if (restsElement.hasChildNodes()) doc.getRootNode().appendChild(restsElement);
     return doc;
   };
 }
