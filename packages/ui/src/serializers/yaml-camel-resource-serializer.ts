@@ -51,10 +51,6 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
     this.comments = comments;
   }
 
-  getLabel(): string {
-    return 'YAML';
-  }
-
   private parseComments(code: string): string[] {
     const lines = code.split('\n');
     const comments: string[] = [];

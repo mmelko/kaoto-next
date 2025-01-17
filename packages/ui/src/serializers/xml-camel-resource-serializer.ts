@@ -1,4 +1,3 @@
-import { CamelResourceSerializer } from './camel-resource-serializer';
 import { isXML, XmlParser } from './xml/xml-parser';
 import { CamelResource } from '../models/camel/camel-resource';
 import { XmlConverter } from './xml/xml-converter';
@@ -19,7 +18,7 @@ export class XmlCamelResourceSerializer implements CamelResourceSerializer {
   parse(code: unknown): CamelYamlDsl | Integration | Kamelet | KameletBinding | Pipe {
     const xmlParser = new XmlParser();
     const entities = xmlParser.parseXML(code as string);
-    return entities;
+    return entities as CamelYamlDsl;
   }
 
   serialize(resource: CamelResource): string {
