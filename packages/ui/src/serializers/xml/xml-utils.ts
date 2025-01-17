@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { JSONSchema4 } from 'json-schema';
 
+const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring'];
 export function extractAttributes<T>(element: Element): Partial<T> {
   const attributes = {} as Partial<T>;
   for (let i = 0; i < element.attributes.length; i++) {
@@ -25,9 +26,11 @@ export function collectNamespaces(element: Element): [{ key: string; value: stri
   Array.from(element.attributes).forEach((attr) => {
     if (attr.name.startsWith('xmlns')) {
       const ns = attr.name.split(':');
-      namespaces.push({ key: ns[1], value: attr.value });
+      // don't add camel default NS
+      if (!DEFAULT_XMLNS.includes(attr.value)) namespaces.push({ key: ns[1], value: attr.value });
     }
   });
+
   if (element.parentElement) namespaces = [...collectNamespaces(element.parentElement), ...namespaces];
   return namespaces;
 }
