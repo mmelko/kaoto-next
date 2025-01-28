@@ -81,7 +81,10 @@ export class XmlParser {
       rawEntities.push(...routeConfigurations);
     }
     // rest of the elements
-    Array.from(xmlDoc.children).forEach((child) => {
+    const rootCamelElement = xmlDoc.getElementsByTagName('camel')[0];
+    const children = rootCamelElement ? rootCamelElement.children : xmlDoc.children;
+    Array.from(children).forEach((child) => {
+      console.log('going to parse child', child);
       if (
         [
           'restConfiguration',
@@ -95,6 +98,7 @@ export class XmlParser {
         ].includes(child.tagName)
       ) {
         const entity = this.routeXmlParser.transformElement(child);
+        console.log('entity', entity);
         if (entity) {
           rawEntities.push({ [child.tagName]: entity });
         }

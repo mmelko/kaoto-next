@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { JSONSchema4 } from 'json-schema';
+import { ICamelProcessorProperty } from '../../models';
 
 const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring'];
 export function extractAttributes<T>(element: Element): Partial<T> {
@@ -11,12 +12,20 @@ export function extractAttributes<T>(element: Element): Partial<T> {
   return attributes;
 }
 
-export function extractAttributesUntyped(element: Element): { [key: string]: unknown } {
+export function extractAttributesWithCatalogCheck(
+  element: Element,
+  properties?: Record<string, ICamelProcessorProperty>,
+): { [p: string]: unknown } {
   const attributes: { [key: string]: string } = {};
+
   for (let i = 0; i < element.attributes.length; i++) {
     const attr = element.attributes[i];
-    attributes[attr.name] = attr.value;
+
+    if (!properties || properties[attr.name]) {
+      attributes[attr.name] = attr.value;
+    }
   }
+
   return attributes;
 }
 

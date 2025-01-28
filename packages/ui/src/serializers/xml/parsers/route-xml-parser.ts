@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { collectNamespaces, extractAttributes, extractAttributesUntyped } from '../xml-utils';
+import { collectNamespaces, extractAttributes, extractAttributesWithCatalogCheck } from '../xml-utils';
 import {
   DoCatch,
   DoTry,
@@ -38,6 +38,8 @@ export class RouteXmlParser {
     ['componentProperty', 'restProperty'],
     ['endpointProperty', 'restProperty'],
     ['apiProperty', 'restProperty'],
+    //saga
+    ['option', 'propertyExpression'],
   ]);
 
   namespaces: Map<string, PropertyDefinition[]> = new Map();
@@ -53,12 +55,16 @@ export class RouteXmlParser {
       return this.transformWithDataformat(element);
     }
 
-    const processor = { ...extractAttributesUntyped(element) } as { [key: string]: unknown };
     const processorModel = CamelCatalogService.getComponent(CatalogKind.Processor, processorName);
 
+    //Some elements are not defined in the catalog even if they are defined in the schemas, so we need to extract them as plan objects
     if (!processorModel) {
-      return {};
+      return extractAttributesWithCatalogCheck(element);
     }
+
+    const processor = { ...extractAttributesWithCatalogCheck(element, processorModel.properties) } as {
+      [key: string]: unknown;
+    };
 
     Object.entries(processorModel.properties).forEach(([name, properties]) => {
       if (properties.type === 'object') {
@@ -66,14 +72,23 @@ export class RouteXmlParser {
           processor[name] = this.transformOptionalExpression(
             element,
             properties,
-            !properties.required ? name : undefined,
+            name === 'expression' ? undefined : name,
           );
         } else if (properties.kind === 'element') {
-          const singleElement = element.getElementsByTagName(name)[0];
-          if (singleElement) processor[name] = this.transformElement(singleElement);
+          let singleElement;
+          if (properties.oneOf) {
+            for (const tag of properties.oneOf) {
+              singleElement = element.getElementsByTagName(tag)[0];
+              if (singleElement) break;
+            }
+          } else {
+            singleElement = element.getElementsByTagName(name)[0];
+          }
+          if (singleElement) processor[singleElement.tagName] = this.transformElement(singleElement);
         }
       } else if (properties.type === 'array') {
         if (name === 'outputs') {
+          // if outputs is specified then the processor has steps
           const steps = this.transformSteps(element, properties.oneOf!);
           if (steps.length > 0) processor['steps'] = steps;
         } else {
@@ -85,6 +100,7 @@ export class RouteXmlParser {
       }
     });
 
+    // because of the missing elements in catalog 4.9
     if (processorName === 'doTry') {
       return this.decorateDoTry(element, processor);
     }
@@ -95,9 +111,8 @@ export class RouteXmlParser {
   transformRoute = (routeElement: Element): RouteDefinition => {
     const fromElement: Element = routeElement.getElementsByTagName('from')[0];
     const from = extractAttributes<FromDefinition>(fromElement) as FromDefinition;
-    const routeDef = extractAttributes<RouteDefinition>(routeElement);
     const routeProperties = CamelCatalogService.getComponent(CatalogKind.Processor, routeElement.tagName)!;
-
+    const routeDef = extractAttributesWithCatalogCheck(routeElement, routeProperties.properties);
     return {
       ...routeDef,
       from: {
@@ -124,8 +139,7 @@ export class RouteXmlParser {
     properties: ICamelProcessorProperty,
     tagName?: string,
   ): ExpressionDefinition | undefined => {
-    let element = parentElement;
-    if (tagName) element = parentElement.getElementsByTagName(tagName)[0];
+    const element = tagName ? parentElement.getElementsByTagName(tagName)[0] : parentElement;
     if (!element) return undefined;
 
     const expressionElement = Array.from(element.children).find((expression) =>
@@ -138,7 +152,8 @@ export class RouteXmlParser {
   transformSteps = (parentElement: Element, processorKeys: string[]): ProcessorDefinition[] => {
     return Array.from(parentElement.children)
       .filter((child) => {
-        return processorKeys.includes(child.tagName) && !['doCatch', 'doFinally'].includes(child.tagName); // Filter out elements not needed
+        // onFallback is listed as a processor in the catalog, but it is not a processor. This is already fixed in the main branch of the camel
+        return processorKeys.includes(child.tagName) && !['doCatch', 'doFinally', 'onFallback'].includes(child.tagName); // Filter out elements not needed
       })
       .map((child) => {
         const step: ProcessorDefinition = {
@@ -171,15 +186,16 @@ export class RouteXmlParser {
 
   transformExpression = (expressionElement: Element): ExpressionDefinition => {
     const expressionType = expressionElement.tagName;
-    const expressionAttributes = extractAttributesUntyped(expressionElement);
-    let namespaces: { key: string; value: string }[] = [];
+    const expressionTypeProperties = CamelCatalogService.getComponent(
+      CatalogKind.Processor,
+      expressionType,
+    )?.properties;
+    const expressionAttributes = extractAttributesWithCatalogCheck(expressionElement, expressionTypeProperties);
+    const namespaces = expressionTypeProperties?.namespace ? collectNamespaces(expressionElement) : [];
 
-    if (CamelCatalogService.getComponent(CatalogKind.Processor, expressionType)?.properties?.namespace) {
-      namespaces = collectNamespaces(expressionElement);
-    }
     return {
       [expressionType]: {
-        expression: expressionElement.textContent,
+        expression: expressionTypeProperties?.expression ? expressionElement.textContent : undefined,
         ...expressionAttributes,
         namespace: namespaces.length > 0 ? namespaces : undefined,
       },
@@ -192,7 +208,7 @@ export class RouteXmlParser {
     if (!dataFormatElement) return {};
     return {
       [dataFormatElement.tagName]: {
-        ...extractAttributesUntyped(dataFormatElement),
+        ...extractAttributesWithCatalogCheck(dataFormatElement),
       },
     };
   };
