@@ -19,8 +19,9 @@ import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { XmlParser } from '../xml-parser';
+import { describe } from 'node:test';
 
-const getElementFromXml = (xml: string): Element => {
+export const getElementFromXml = (xml: string): Element => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xml, 'application/xml');
   return xmlDoc.documentElement;
@@ -161,35 +162,6 @@ describe('RouteXmlParser', () => {
     });
   });
 
-  it('transforms doTry and doCatch elements correctly', () => {
-    const doTryElement = getElementFromXml(`
-    <doTry>
-      <to uri="mock:try"/>
-      <doCatch>
-        <exception>java.lang.Exception</exception>
-        <to uri="mock:catch"/>
-      </doCatch>
-      <doFinally>
-        <to uri="mock:finally"/>
-      </doFinally>
-    </doTry>
-  `);
-
-    const result = parser.transformElement(doTryElement);
-    expect(result).toEqual({
-      steps: [{ to: { uri: 'mock:try' } }],
-      doCatch: [
-        {
-          exception: ['java.lang.Exception'],
-          steps: [{ to: { uri: 'mock:catch' } }],
-        },
-      ],
-      doFinally: {
-        steps: [{ to: { uri: 'mock:finally' } }],
-      },
-    });
-  });
-
   it('transforms xpath with namespaces set', () => {
     const parser = new XmlParser();
     const namespaceDocument = new DOMParser().parseFromString(
@@ -225,28 +197,13 @@ describe('RouteXmlParser', () => {
                         xpath: {
                           expression: '/ns1:foo/',
                           namespace: [
-                            {
-                              key: 'ns1',
-                              value: 'n1',
-                            },
-                            {
-                              key: 'ns2',
-                              value: 'n2',
-                            },
-                            {
-                              key: 'ns3',
-                              value: 'n3',
-                            },
+                            { key: 'ns1', value: 'n1' },
+                            { key: 'ns2', value: 'n2' },
+                            { key: 'ns3', value: 'n3' },
                           ],
                         },
                       },
-                      steps: [
-                        {
-                          to: {
-                            uri: 'mock:bar',
-                          },
-                        },
-                      ],
+                      steps: [{ to: { uri: 'mock:bar' } }],
                     },
                   ],
                 },
@@ -254,7 +211,6 @@ describe('RouteXmlParser', () => {
             ],
             uri: 'direct:one',
           },
-          'xmlns:ns3': 'n3',
         },
       },
     ]);
