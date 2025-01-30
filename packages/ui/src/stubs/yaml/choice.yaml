@@ -18,6 +18,17 @@
               steps:
                 - log:
                     message: Other fruits
+                - choice:
+                    id: cojsa2
+                    when:
+                      - expression:
+                          simple:
+                            expression: ${body} contains 'Apple'
+                        steps:
+                          - log:
+                              message: Apple branch
+                          - to:
+                              uri: mock:result
                 - to:
                     uri: mock:result
             when:

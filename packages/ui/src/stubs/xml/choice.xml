@@ -26,6 +26,13 @@
                 </when>
                 <otherwise>
                     <log message="Other fruits"/>
+                    <choice id="cojsa2">
+                        <when>
+                            <simple>${body} contains 'Apple'</simple>
+                            <log message="Apple branch"/>
+                            <to uri="mock:result"/>
+                        </when>
+                    </choice>
                     <to uri="mock:result"/>
                 </otherwise>
             </choice>
