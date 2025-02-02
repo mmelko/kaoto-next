@@ -182,7 +182,7 @@ export class StepParser {
 
     const whenElement = element.getElementsByTagName('when')[0];
     if (whenElement) {
-      const when = this.parseElement(whenElement);
+      const when = this.parseElement(whenElement) as { [key: string]: unknown; steps?: [] };
       when['steps'] = undefined;
       processor['when'] = when;
     }
