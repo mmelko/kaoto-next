@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-import { DoCatch, DoTry, ProcessorDefinition } from '@kaoto/camel-catalog/types';
+import { DoCatch, DoTry, ProcessorDefinition, When1 as When } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind, ICamelProcessorProperty } from '../../../models';
-import { extractAttributes, PROCESSOR_NAMES } from '../xml-utils';
+import { ARRAY_TYPE_NAMES, extractAttributes, PROCESSOR_NAMES } from '../xml-utils';
 import { ExpressionParser } from './expression-parser';
 
 export type ElementTransformer = (element: Element) => unknown;
 
 export class StepParser {
-  private static readonly FORBIDDEN_KEYS = ['doCatch', 'doFinally', 'onFallback', 'when', 'onWhen'];
+  private static readonly SKIP_KEYS = ['doCatch', 'doFinally', 'onFallback', 'when', 'onWhen'];
 
   static parseSteps(parentElement: Element, processorKeys: string[]): ProcessorDefinition[] {
     return Array.from(parentElement.children)
       .filter((child) => {
         // onFallback is listed as a processor in the catalog, but it is not a processor. RouteXmlParser. is already fixed in the main branch of the camel
-        return processorKeys.includes(child.tagName) && !this.FORBIDDEN_KEYS.includes(child.tagName); // Filter out elements not needed
+        return processorKeys.includes(child.tagName) && !this.SKIP_KEYS.includes(child.tagName); // Filter out elements not needed
       })
       .map((child) => {
         const step: ProcessorDefinition = {
@@ -52,6 +52,9 @@ export class StepParser {
 
     Object.entries(processorModel.properties).forEach(([name, properties]) => {
       switch (properties.kind) {
+        case 'value':
+          processor[name] = element.textContent;
+          break;
         case 'attribute':
           if (element.hasAttribute(name)) {
             processor[name] = element.getAttribute(name);
@@ -78,7 +81,7 @@ export class StepParser {
     return processor;
   }
 
-  private static parseElementType(
+  static parseElementType(
     name: string,
     element: Element,
     properties: ICamelProcessorProperty,
@@ -128,23 +131,40 @@ export class StepParser {
   ): { key: string; value: unknown } {
     if (name === 'outputs') {
       // if outputs is specified then the processor has steps
+
       const steps = this.parseSteps(element, properties.oneOf!);
       if (steps.length > 0 || properties.required) return { key: 'steps', value: steps };
     }
-
-    const arrayClause = Array.from(element.children)
-      // we need to filter only direct children because getElementsByTagName returns all descendants
-      .filter((e) => e.tagName === name)
-      .map((el) =>
-        properties.javaType === 'java.util.List<java.lang.String>'
-          ? el.textContent
-          : transformer
-            ? transformer(el)
-            : this.parseElement(el),
-      );
+    const arrayClause = this.parseElementsArray(name, element, properties, transformer);
 
     if (arrayClause.length > 0) return { key: name, value: arrayClause };
-    return { key: name, value: undefined };
+    return { key: name, value: properties.required ? [] : undefined };
+  }
+
+  static parseElementsArray(
+    name: string,
+    element: Element,
+    properties: ICamelProcessorProperty,
+    transformer?: ElementTransformer,
+  ): unknown[] {
+    const arrayElementName = ARRAY_TYPE_NAMES.get(name) ?? name;
+
+    const children = name === arrayElementName ? element.children : element.getElementsByTagName(name)[0]?.children;
+    if (!children) undefined;
+
+    return (
+      Array.from(children)
+
+        // we need to filter only direct children because getElementsByTagName returns all descendants
+        .filter((e) => e.tagName === arrayElementName)
+        .map((el) =>
+          properties.javaType === 'java.util.List<java.lang.String>'
+            ? el.textContent
+            : transformer
+              ? transformer(el)
+              : this.parseElement(el),
+        )
+    );
   }
 
   static decorateDoTry(doTryElement: Element, processor: DoTry) {
@@ -156,6 +176,8 @@ export class StepParser {
       const element = this.parseElement(child);
 
       if (child.tagName === 'doCatch') {
+        //set to undefined because onWhen definition doesn't have steps. It's a special case
+        this.checkOnWhen(element);
         doCatchArray.push(element as DoCatch);
       } else if (tagNameLower === 'doFinally') {
         doFinallyElement = element;
@@ -185,6 +207,15 @@ export class StepParser {
       const when = this.parseElement(whenElement) as { [key: string]: unknown; steps?: [] };
       when['steps'] = undefined;
       processor['when'] = when;
+    }
+  }
+
+  private static checkOnWhen(element: unknown) {
+    const e = element as { [key: string]: unknown };
+    if (e.onWhen) {
+      if ((e.onWhen as When).steps) {
+        (element as { onWhen: When }).onWhen.steps = undefined;
+      }
     }
   }
 }

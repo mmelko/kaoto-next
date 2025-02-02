@@ -13,9 +13,13 @@ export const PROCESSOR_NAMES: Map<string, string> = new Map([
   ['componentProperty', 'restProperty'],
   ['endpointProperty', 'restProperty'],
   ['apiProperty', 'restProperty'],
+  ['examples', 'restProperty'],
+  ['header', 'responseHeader'],
+  // ['allowableValues', 'value'],
   //saga
   ['option', 'propertyExpression'],
 ]);
+export const ARRAY_TYPE_NAMES: Map<string, string> = new Map([['allowableValues', 'value']]);
 
 const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring', 'http://www.w3.org/2001/XMLSchema-instance'];
 

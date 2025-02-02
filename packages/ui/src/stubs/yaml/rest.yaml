@@ -1,23 +1,39 @@
 - rest:
     get:
-      - param: []
+      - param:
+          - name: name
+            required: "true"
+            type: query
+          - defaultValue: blah
+            name: name2
+            required: "true"
+            type: query
         path: /hello
-        responseMessage: []
-        security: []
+        responseMessage:
+          - code: "200"
+            examples:
+              - key: example
+                value: value
+              - key: example
+                value: value
+            header:
+              - description: header
+                allowableValues:
+                  - value: "1"
+                  - value: "2"
+                name: header
+            message: hello
+        security:
+          - key: hello
+            scopes: scope
         to:
           uri: direct:hello
       - consumes: application/json
-        param: []
         path: /bye
-        responseMessage: []
-        security: []
         to:
           uri: direct:bye
     path: /say
     post:
-      - param: []
-        path: /bye
-        responseMessage: []
-        security: []
+      - path: /bye
         to:
           uri: mock:update
