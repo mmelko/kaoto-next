@@ -65,6 +65,7 @@ export const sagaEntity = {
     { key: 'myOptionKey', expression: { constant: { expression: 'myOptionValue' } } },
     { key: 'myOptionKey2', expression: { constant: { expression: 'myOptionValue2' } } },
   ],
+  steps: [],
 };
 
 export const splitEntity = {

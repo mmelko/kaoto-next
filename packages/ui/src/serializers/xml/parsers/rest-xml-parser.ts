@@ -26,13 +26,19 @@ import {
   RestSecurity,
   To,
 } from '@kaoto/camel-catalog/types';
-import { extractAttributes } from '../xml-utils';
+import { extractAttributesTyped, extractAttributes } from '../xml-utils';
+import { CamelCatalogService, CatalogKind } from '../../../models';
+import { RouteXmlParser } from './route-xml-parser';
+import { StepParser } from './step-parser';
 
 export class RestXmlParser {
+  routeXmlParser = new RouteXmlParser();
   // Main transformation for <rest> elements
   transformRest = (restElement: Element): Rest => {
+    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'rest')?.properties;
+
     return {
-      ...extractAttributes<Rest>(restElement),
+      ...extractAttributes(restElement, properties),
       ...this.transformRestVerbs(restElement),
     };
   };
@@ -46,7 +52,7 @@ export class RestXmlParser {
     verbNames.forEach((verb) => {
       const verbInstances = Array.from(restElement.getElementsByTagName(verb));
       if (verbInstances.length > 0) {
-        verbs[verb] = verbInstances.map((verbElement: Element) => this.transformRestVerb(verbElement, verb));
+        verbs[verb] = verbInstances.map((verbElement: Element) => StepParser.parseElement(verbElement));
       }
     });
 
@@ -56,15 +62,15 @@ export class RestXmlParser {
   private extractAttributes = (verb: string, element: Element): Partial<Get | Post | Patch | Put | Delete> => {
     switch (verb) {
       case 'get':
-        return extractAttributes<Get>(element);
+        return extractAttributesTyped<Get>(element);
       case 'post':
-        return extractAttributes<Post>(element);
+        return extractAttributesTyped<Post>(element);
       case 'put':
-        return extractAttributes<Put>(element);
+        return extractAttributesTyped<Put>(element);
       case 'delete':
-        return extractAttributes<Delete>(element);
+        return extractAttributesTyped<Delete>(element);
       case 'patch':
-        return extractAttributes<Patch>(element);
+        return extractAttributesTyped<Patch>(element);
     }
     return {};
   };
@@ -93,7 +99,7 @@ export class RestXmlParser {
 
   // Transform the <to> element inside each verb
   transformTo = (toElement: Element): To | undefined => {
-    return toElement ? extractAttributes<To>(toElement) : undefined;
+    return toElement ? extractAttributesTyped<To>(toElement) : undefined;
   };
 
   // New: Transform <security> elements inside verbs

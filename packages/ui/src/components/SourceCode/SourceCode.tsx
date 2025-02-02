@@ -8,7 +8,7 @@ import { RedoButton } from './RedoButton';
 import './SourceCode.scss';
 import { UndoButton } from './UndoButton';
 import './workers/enable-workers';
-import { isXML } from '../../serializers/xml/xml-parser';
+import { isXML } from '../../serializers/xml/kaoto-xml-parser';
 
 interface SourceCodeProps {
   code: string;

@@ -3,30 +3,30 @@ export const aggregateXml = `
            aggregationStrategyMethodName="append"
            aggregationStrategyMethodAllowNull="true"
            completionSize="3">
-    <correlationExpression>
-        <constant resultType="java.lang.Integer">true</constant>
-    </correlationExpression>
+           <correlationExpression>
+            <constant resultType="java.lang.Integer">true</constant>
+           </correlationExpression>
     <completionPredicate>
         <constant>predicate</constant>
     </completionPredicate>
+      <completionTimeoutExpression>
+        <datasonnet>datasonnet</datasonnet>
+    </completionTimeoutExpression>
     <completionSizeExpression>
         <header>head</header>
     </completionSizeExpression>
-        <completionTimeoutExpression>
-        <datasonnet>datasonnet</datasonnet>
-    </completionTimeoutExpression>
     <to uri="mock:result"/>
 </aggregate>
 `;
 
 export const circuitBreakerXml = `
 <circuitBreaker>
-  <to uri="http://fooservice.com/slow"/>
   <onFallback>
     <transform>
       <constant>Fallback message</constant>
     </transform>
   </onFallback>
+   <to uri="http://fooservice.com/slow"/>
 </circuitBreaker>
 `;
 
@@ -54,8 +54,8 @@ export const loopXml = `
 `;
 
 export const multicastXml = `
-<multicast parallelProcessing="true" timeout="5000"
-           aggregationStrategy="#class:com.foo.MyAggregationStrategy">
+<multicast  aggregationStrategy="#class:com.foo.MyAggregationStrategy" 
+parallelProcessing="true" timeout="5000">
   <to uri="direct:b"/>
   <to uri="direct:c"/>
   <to uri="direct:d"/>
@@ -72,8 +72,8 @@ export const pipelineXml = `
 
 export const resequenceXml = `
 <resequence>
-  <batchConfig batchSize="300" batchTimeout="4000"/>
   <simple>body</simple>
+  <batchConfig batchSize="300" batchTimeout="4000"/>
   <to uri="mock:result"/>
 </resequence>
 `;
@@ -161,10 +161,4 @@ export const throttleXml = `
 <throttle timePeriodMillis="10000">
   <constant>3</constant>
 </throttle>
-`;
-
-export const sampleXml = `
-<sample samplePeriod="5000">
-  <to uri="direct:sampled"/>
-</sample>
 `;

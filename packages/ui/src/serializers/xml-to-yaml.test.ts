@@ -5,14 +5,14 @@ import { CamelCatalogService, CatalogKind } from '../models';
 import fs from 'fs';
 import path from 'path';
 import { YamlCamelResourceSerializer } from './yaml-camel-resource-serializer';
-import { XmlParser } from './xml/xml-parser';
+import { KaotoXmlParser } from './xml/kaoto-xml-parser';
 
 describe('XmlParser - XML to YAML comparison', () => {
-  let parser: XmlParser;
+  let parser: KaotoXmlParser;
   let yamlSerializer: YamlCamelResourceSerializer;
 
   beforeAll(async () => {
-    parser = new XmlParser();
+    parser = new KaotoXmlParser();
     yamlSerializer = new YamlCamelResourceSerializer(); // Initialize your YAML serializer
     const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
     CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
@@ -40,9 +40,4 @@ describe('XmlParser - XML to YAML comparison', () => {
       tesXmlToYaml(xmlFile);
     });
   });
-
-  // it('parse single file correctly', () => {
-  //   const fileName = 'routeConfiguration.xml';
-  //   testFile(fileName);
-  // });
 });

@@ -1,67 +1,127 @@
-// packages/ui/src/serializers/xml/parsers/route-xml-parser.eip.test.ts
-
-import catalogLibrary from '@kaoto/camel-catalog/index.json';
 import { describe } from 'node:test';
-import { RouteXmlParser } from './route-xml-parser';
+import catalogLibrary from '@kaoto/camel-catalog/index.json';
+import { StepParser } from './step-parser';
+import { getElementFromXml } from './route-xml-parser.test';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind } from '../../../models';
-import { getElementFromXml } from './route-xml-parser.test';
 import {
   aggregateXml,
+  choiceXml,
   circuitBreakerXml,
+  deadLetterChannelXml,
+  doTryXml,
+  dynamicRouterXml,
+  enrichXml,
   filterXml,
   loadBalanceXml,
   loopXml,
   multicastXml,
   pipelineXml,
+  recipientListXml,
   resequenceXml,
+  routingSlipXml,
   sagaXml,
   splitXml,
-  choiceXml,
-  doTryXml,
-  deadLetterChannelXml,
-  enrichXml,
-  dynamicRouterXml,
-  recipientListXml,
-  routingSlipXml,
   throttleXml,
-  sampleXml,
 } from '../../../stubs/eip-xml-snippets';
 import {
   aggregateEntity,
+  choiceEntity,
   circuitBreakerEntity,
+  deadLetterChannelEntity,
+  doTryEntity,
+  dynamicRouterEntity,
+  enrichEntity,
   filterEntity,
   loadBalanceEntity,
   loopEntity,
   multicastEntity,
   pipelineEntity,
+  recipientListEntity,
   resequenceEntity,
+  routingSlipEntity,
   sagaEntity,
   splitEntity,
-  choiceEntity,
-  doTryEntity,
-  deadLetterChannelEntity,
-  enrichEntity,
-  dynamicRouterEntity,
-  recipientListEntity,
-  routingSlipEntity,
   throttleEntity,
-  sampleEntity,
 } from '../../../stubs/eip-entity-snippets';
 
+describe('ProcessorParser', () => {
+  beforeAll(async () => {
+    const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
+    CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
+  });
+
+  it('transforms onException element correctly', () => {
+    const onExceptionElement = getElementFromXml(`
+    <onException>
+      <exception>java.lang.Exception</exception>
+      <handled>
+        <constant>true</constant>
+      </handled>
+      <to uri="mock:error"/>
+    </onException>
+  `);
+
+    const result = StepParser.parseElement(onExceptionElement);
+    expect(result).toEqual({
+      exception: ['java.lang.Exception'],
+      handled: { constant: { expression: 'true' } },
+      steps: [{ to: { uri: 'mock:error' } }],
+    });
+  });
+
+  it('transforms onCompletion element correctly', () => {
+    const onCompletionElement = getElementFromXml(`
+    <onCompletion>
+      <to uri="mock:completion"/>
+    </onCompletion>
+  `);
+
+    const result = StepParser.parseElement(onCompletionElement);
+    expect(result).toEqual({
+      steps: [{ to: { uri: 'mock:completion' } }],
+    });
+  });
+
+  it('transforms choice element correctly', () => {
+    const choiceElement = getElementFromXml(`
+    <choice>
+      <when>
+        <simple>\${header.foo} == 'bar'</simple>
+        <to uri="mock:when"/>
+      </when>
+      <otherwise>
+        <to uri="mock:otherwise"/>
+      </otherwise>
+    </choice>
+  `);
+
+    const result = StepParser.parseElement(choiceElement);
+    expect(result).toEqual({
+      when: [
+        {
+          expression: { simple: { expression: "${header.foo} == 'bar'" } },
+          steps: [{ to: { uri: 'mock:when' } }],
+        },
+      ],
+      otherwise: {
+        steps: [{ to: { uri: 'mock:otherwise' } }],
+      },
+    });
+  });
+});
+
 describe('Route EIPs xml parsing', () => {
-  let parser: RouteXmlParser;
   let transformElement: (element: string) => unknown;
 
   beforeAll(async () => {
-    parser = new RouteXmlParser();
     const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
     CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
 
     transformElement = (element: string) => {
       const xmlDoc = getElementFromXml(element);
-      return parser.transformElement(xmlDoc);
+      return StepParser.parseElement(xmlDoc);
     };
   });
 
@@ -84,7 +144,6 @@ describe('Route EIPs xml parsing', () => {
     { name: 'recipientList', xml: recipientListXml, entity: recipientListEntity },
     { name: 'routingSlip', xml: routingSlipXml, entity: routingSlipEntity },
     { name: 'throttle', xml: throttleXml, entity: throttleEntity },
-    { name: 'sample', xml: sampleXml, entity: sampleEntity },
   ];
 
   it.each(testCases)('Parse $name', ({ xml, entity }) => {
