@@ -2,8 +2,24 @@
 import { JSONSchema4 } from 'json-schema';
 import { ICamelProcessorProperty } from '../../models';
 
-const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring'];
-export function extractAttributes<T>(element: Element): Partial<T> {
+export const PROCESSOR_NAMES: Map<string, string> = new Map([
+  // necessary for different definition names
+  ['onWhen', 'when'],
+  // route configuration
+  ['templateBean', 'beanFactory'],
+  // rest configuration
+  ['apiProperty', 'restProperty'],
+  ['dataFormatProperty', 'restProperty'],
+  ['componentProperty', 'restProperty'],
+  ['endpointProperty', 'restProperty'],
+  ['apiProperty', 'restProperty'],
+  //saga
+  ['option', 'propertyExpression'],
+]);
+
+const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring', 'http://www.w3.org/2001/XMLSchema-instance'];
+
+export function extractAttributesTyped<T>(element: Element): Partial<T> {
   const attributes = {} as Partial<T>;
   for (let i = 0; i < element.attributes.length; i++) {
     const attr = element.attributes[i];
@@ -12,7 +28,7 @@ export function extractAttributes<T>(element: Element): Partial<T> {
   return attributes;
 }
 
-export function extractAttributesWithCatalogCheck(
+export function extractAttributes(
   element: Element,
   properties?: Record<string, ICamelProcessorProperty>,
 ): { [p: string]: unknown } {
@@ -42,6 +58,17 @@ export function collectNamespaces(element: Element): [{ key: string; value: stri
 
   if (element.parentElement) namespaces = [...collectNamespaces(element.parentElement), ...namespaces];
   return namespaces;
+}
+
+function getRouteElement(element: Element): Element {
+  if (element.tagName === 'route') return element;
+  return getRouteElement(element.parentElement);
+}
+
+export function setNamespaces(element: Element, namespaces: [{ key: string; value: string }]): void {
+  namespaces.forEach((ns) => {
+    element.setAttribute(`xmlns:${ns.key}`, ns.value);
+  });
 }
 
 export function formatXml(xml: string): string {

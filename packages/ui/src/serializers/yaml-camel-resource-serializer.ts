@@ -1,4 +1,4 @@
-import { isXML } from './xml/xml-parser';
+import { isXML } from './xml/kaoto-xml-parser';
 import { CamelResource } from '../models/camel';
 import { parse, stringify } from 'yaml';
 import { CamelResourceSerializer } from './camel-resource-serializer';

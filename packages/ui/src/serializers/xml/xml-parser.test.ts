@@ -15,7 +15,7 @@
  */
 
 import catalogLibrary from '@kaoto/camel-catalog/index.json';
-import { XmlParser, isXML } from './xml-parser';
+import { KaotoXmlParser, isXML } from './kaoto-xml-parser';
 import { doTryCamelRouteJson, doTryCamelRouteXml } from '../../stubs';
 import { beanWithConstructorAandProperties, beanWithConstructorAandPropertiesXML } from '../../stubs/beans';
 import { getFirstCatalogMap } from '../../stubs/test-load-catalog';
@@ -23,7 +23,7 @@ import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind } from '../../models';
 
 describe('XmlParser', () => {
-  let parser: XmlParser;
+  let parser: KaotoXmlParser;
 
   beforeAll(async () => {
     const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
@@ -31,7 +31,7 @@ describe('XmlParser', () => {
   });
 
   beforeEach(async () => {
-    parser = new XmlParser();
+    parser = new KaotoXmlParser();
   });
 
   it('parses XML with a single route correctly', () => {
@@ -42,7 +42,7 @@ describe('XmlParser', () => {
     expect(result).toEqual([
       {
         route: {
-          from: { uri: 'direct:start', steps: [] },
+          from: { uri: 'direct:start' },
         },
       },
     ]);
@@ -53,7 +53,7 @@ describe('XmlParser', () => {
     const result = parser.parseXML(xml);
     expect(result).toEqual([
       {
-        route: { id: 'test', from: { uri: 'direct:first', steps: [] } },
+        route: { id: 'test', from: { uri: 'direct:first' } },
       },
       {
         route: {
