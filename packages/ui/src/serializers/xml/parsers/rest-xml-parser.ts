@@ -14,19 +14,8 @@
  * limitations under the License.
  */
 
-import {
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Put,
-  ResponseMessage,
-  Rest,
-  RestSecurity,
-  To,
-} from '@kaoto/camel-catalog/types';
-import { extractAttributesTyped, extractAttributes } from '../xml-utils';
+import { Param, ResponseMessage, Rest, RestSecurity } from '@kaoto/camel-catalog/types';
+import { extractAttributes } from '../xml-utils';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { RouteXmlParser } from './route-xml-parser';
 import { StepParser } from './step-parser';
@@ -34,17 +23,17 @@ import { StepParser } from './step-parser';
 export class RestXmlParser {
   routeXmlParser = new RouteXmlParser();
   // Main transformation for <rest> elements
-  transformRest = (restElement: Element): Rest => {
+  static parse(restElement: Element): Rest {
     const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'rest')?.properties;
 
     return {
       ...extractAttributes(restElement, properties),
-      ...this.transformRestVerbs(restElement),
+      ...this.parseRestVerbs(restElement),
     };
-  };
+  }
 
   // Transform verbs like <get>, <post>, etc.
-  transformRestVerbs = (restElement: Element): Rest => {
+  private static parseRestVerbs(restElement: Element): Rest {
     const verbs: { [key: string]: unknown } = {};
     const verbNames = ['get', 'post', 'put', 'delete', 'patch', 'head'];
 
@@ -52,79 +41,56 @@ export class RestXmlParser {
     verbNames.forEach((verb) => {
       const verbInstances = Array.from(restElement.getElementsByTagName(verb));
       if (verbInstances.length > 0) {
-        verbs[verb] = verbInstances.map((verbElement: Element) => StepParser.parseElement(verbElement));
+        verbs[verb] = verbInstances.map((verbElement: Element) => this.parseRestVerb(verbElement));
       }
     });
 
     return verbs; // Return the dynamically populated verbs object
-  };
+  }
 
-  private extractAttributes = (verb: string, element: Element): Partial<Get | Post | Patch | Put | Delete> => {
-    switch (verb) {
-      case 'get':
-        return extractAttributesTyped<Get>(element);
-      case 'post':
-        return extractAttributesTyped<Post>(element);
-      case 'put':
-        return extractAttributesTyped<Put>(element);
-      case 'delete':
-        return extractAttributesTyped<Delete>(element);
-      case 'patch':
-        return extractAttributesTyped<Patch>(element);
+  static parseRestVerb(verbElement: Element) {
+    const verb = StepParser.parseElement(verbElement) as { [key: string]: unknown };
+    //in older catalogs (in 4.9) are missing properites: param, security, responseMessage
+    this.decorateVerb(verb, verbElement);
+
+    return verb;
+  }
+
+  static decorateVerb(partial: { [key: string]: unknown }, verbElement: Element) {
+    const param = this.parseParams(verbElement);
+    if (param.length > 0) {
+      partial['param'] = param;
     }
-    return {};
-  };
-  // Transform each individual HTTP verb (get, post, etc.)
-  transformRestVerb = (verbElement: Element, verb: string): Get | Post | Patch | Put | Delete => {
-    const partial = this.extractAttributes(verb, verbElement);
 
-    return {
-      ...partial,
-      to: this.transformTo(verbElement.getElementsByTagName('to')[0]),
-      param: this.transformParams(verbElement),
-      security: this.transformSecurity(verbElement), // New
-      responseMessage: this.transformResponseMessages(verbElement), // New
-    };
-  };
+    const security = this.transformSecurity(verbElement);
+    if (security.length > 0) {
+      partial['security'] = security;
+    }
+
+    const responseMessages = this.parseResponseMessages(verbElement);
+    if (responseMessages.length > 0) {
+      partial['responseMessage'] = responseMessages;
+    }
+  }
 
   // Transform the <param> elements inside each verb
-  transformParams = (verbElement: Element): Param[] => {
-    return Array.from(verbElement.getElementsByTagName('param')).map((paramElement) => ({
-      name: paramElement.getAttribute('name')!,
-      type: paramElement.getAttribute('type') as 'body' | 'formData' | 'header' | 'path' | 'query',
-      required: paramElement.getAttribute('required') === 'true',
-      defaultValue: paramElement.getAttribute('defaultValue') ?? undefined,
-    }));
-  };
-
-  // Transform the <to> element inside each verb
-  transformTo = (toElement: Element): To | undefined => {
-    return toElement ? extractAttributesTyped<To>(toElement) : undefined;
-  };
+  static parseParams(verbElement: Element): Param[] {
+    return Array.from(verbElement.getElementsByTagName('param')).map(
+      (paramElement) => StepParser.parseElement(paramElement) as Param,
+    );
+  }
 
   // New: Transform <security> elements inside verbs
-  transformSecurity = (verbElement: Element): RestSecurity[] => {
-    return Array.from(verbElement.getElementsByTagName('security')).map((securityElement) => {
-      return {
-        [securityElement.getAttribute('type')!]: {
-          roles: securityElement.getAttribute('roles')?.split(',') || [],
-        },
-      } as unknown as RestSecurity;
-    });
-  };
+  static transformSecurity(verbElement: Element): RestSecurity[] {
+    return Array.from(verbElement.getElementsByTagName('security')).map(
+      (securityElement) => StepParser.parseElement(securityElement) as RestSecurity,
+    );
+  }
 
   // New: Transform <responseMessage> elements inside verbs
-  transformResponseMessages = (verbElement: Element): ResponseMessage[] => {
-    return Array.from(verbElement.getElementsByTagName('responseMessage')).map((responseMessageElement) => ({
-      code: responseMessageElement.getAttribute('code') ?? undefined,
-      message: responseMessageElement.getAttribute('message') as string,
-    }));
-  };
-
-  // Helper method to extract attributes from schema
-
-  // Helper to capitalize the first letter of verbs like 'get' to 'Get'
-  capitalize = (str: string): string => {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  };
+  private static parseResponseMessages(verbElement: Element): ResponseMessage[] {
+    return Array.from(verbElement.getElementsByTagName('responseMessage')).map((responseMessageElement) => {
+      return StepParser.parseElement(responseMessageElement) as ResponseMessage;
+    });
+  }
 }

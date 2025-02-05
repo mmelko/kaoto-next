@@ -31,12 +31,10 @@ export function isXML(code: unknown): boolean {
 export class KaotoXmlParser {
   routeXmlParser: RouteXmlParser;
   beanParser: BeansXmlParser;
-  restParser: RestXmlParser;
 
   constructor() {
     this.routeXmlParser = new RouteXmlParser();
     this.beanParser = new BeansXmlParser();
-    this.restParser = new RestXmlParser();
   }
 
   parseXML(xml: string): unknown {
@@ -51,7 +49,7 @@ export class KaotoXmlParser {
 
     // Process route entities
     const routes = Array.from(xmlDoc.getElementsByTagName('route')).map((routeElement) =>
-      RouteXmlParser.transformRoute(routeElement),
+      RouteXmlParser.parse(routeElement),
     );
 
     if (routes.length > 0) {
@@ -67,7 +65,7 @@ export class KaotoXmlParser {
 
     // Process rest entities
     const restEntities = Array.from(xmlDoc.getElementsByTagName('rest')).map((restElement) => ({
-      rest: this.restParser.transformRest(restElement),
+      rest: RestXmlParser.parse(restElement),
     }));
 
     if (restEntities.length > 0) {
@@ -76,7 +74,7 @@ export class KaotoXmlParser {
 
     // Process route configurations
     const routeConfigurations = Array.from(xmlDoc.getElementsByTagName('routeConfiguration')).map((routeConf) => ({
-      routeConfiguration: RouteXmlParser.transformRouteConfiguration(routeConf),
+      routeConfiguration: RouteXmlParser.parseRouteConfiguration(routeConf),
     }));
 
     if (routeConfigurations.length > 0) {

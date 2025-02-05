@@ -41,7 +41,7 @@ describe('RouteXmlParser', () => {
       <to uri="mock:intercepted"/>
   </intercept>`);
 
-    const result = RouteXmlParser.transformRouteConfigurationElement(interceptElement, 'intercept');
+    const result = RouteXmlParser.parseRouteConfigurationElement(interceptElement, 'intercept');
     expect(result).toEqual({
       intercept: {
         id: 'intercept1',
@@ -55,7 +55,7 @@ describe('RouteXmlParser', () => {
     const interceptFromElement = getElementFromXml(`<interceptFrom id="interceptFrom1" uri="jms*">
     <to uri="log:incoming"/>
   </interceptFrom>`);
-    const result = RouteXmlParser.transformRouteConfigurationElement(interceptFromElement, 'interceptFrom');
+    const result = RouteXmlParser.parseRouteConfigurationElement(interceptFromElement, 'interceptFrom');
     expect(result).toEqual({
       interceptFrom: {
         id: 'interceptFrom1',
@@ -72,7 +72,7 @@ describe('RouteXmlParser', () => {
       </interceptSendToEndpoint>
     `);
 
-    const result = RouteXmlParser.transformRouteConfigurationElement(
+    const result = RouteXmlParser.parseRouteConfigurationElement(
       interceptSendToEndpointElement,
       'interceptSendToEndpoint',
     );

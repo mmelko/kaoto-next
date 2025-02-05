@@ -24,19 +24,19 @@ import {
 import { StepParser } from './step-parser';
 
 export class RouteXmlParser {
-  static transformRouteConfigurationElement(routeConfigElement: Element, elementName: string): unknown {
+  static parseRouteConfigurationElement(routeConfigElement: Element, elementName: string): unknown {
     return {
       [elementName]: StepParser.parseElement(routeConfigElement),
     };
   }
 
-  static transformRouteConfiguration(routeConfigElement: Element): RouteConfigurationDefinition {
+  static parseRouteConfiguration(routeConfigElement: Element): RouteConfigurationDefinition {
     return StepParser.parseElement(routeConfigElement, (element: Element) => {
-      return this.transformRouteConfigurationElement(element, element.tagName);
+      return this.parseRouteConfigurationElement(element, element.tagName);
     }) as RouteConfigurationDefinition;
   }
 
-  static transformRoute(routeElement: Element): RouteDefinition {
+  static parse(routeElement: Element): RouteDefinition {
     const fromElement: Element = routeElement.getElementsByTagName('from')[0];
 
     const from = extractAttributesTyped<FromDefinition>(fromElement) as FromDefinition;
