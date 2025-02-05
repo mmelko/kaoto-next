@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-import { extractAttributesTyped } from '../xml-utils';
+import { extractAttributes } from '../xml-utils';
 import { BeanFactory } from '@kaoto/camel-catalog/types';
+import { CamelCatalogService, CatalogKind } from '../../../models';
 
 export class BeansXmlParser {
   beans: BeanFactory[] = [];
 
-  private transformBeanFactory = (beanElement: Element): BeanFactory => {
+  static transformBeanFactory(beanElement: Element): BeanFactory {
     // Initialize the bean object
-    const bean: BeanFactory = extractAttributesTyped<BeanFactory>(beanElement) as BeanFactory;
+    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'beanFactory')?.properties;
+    const bean: BeanFactory = extractAttributes(beanElement, properties) as unknown as BeanFactory;
 
     // Special case for 'name/id' and 'type/class'
     const name = beanElement.getAttribute('id');
@@ -35,57 +37,59 @@ export class BeansXmlParser {
       bean.type = type;
     }
 
-    const constructorsElement = beanElement.getElementsByTagName('constructors')[0];
-    if (constructorsElement) {
-      let constructors: { [key: string]: string } = {};
-
-      Array.from(beanElement.getElementsByTagName('constructors')[0].children).forEach((constructorElement) => {
-        const constructorIndex = constructorElement.getAttribute('index');
-        const constructorValue = constructorElement.getAttribute('value');
-
-        if (constructorIndex && constructorValue) {
-          constructors = { ...constructors, [constructorIndex]: constructorValue };
-        }
-      });
-
-      if (Object.keys(constructors).length > 0) {
-        bean['constructors'] = constructors;
-      }
-    }
-    const propertiesElement = beanElement.getElementsByTagName('properties')[0];
-    if (propertiesElement) {
-      let properties: { [key: string]: string } = {};
-
-      Array.from(beanElement.getElementsByTagName('properties')[0].children).forEach((propertyElement) => {
-        if (propertyElement.hasChildNodes()) {
-          //
-        }
-        const propName = propertyElement.getAttribute('key') || propertyElement.getAttribute('name');
-        const propValue = propertyElement.getAttribute('value') || propertyElement.getAttribute('ref');
-
-        if (propName && propValue) {
-          properties = { ...properties, [propName]: propValue };
-        }
-      });
-
-      if (Object.keys(properties).length > 0) {
-        bean['properties'] = properties;
-      }
-    }
+    bean['constructors'] = this.parseBeanConstructors(beanElement);
+    bean['properties'] = this.parseBeanProperties(beanElement);
 
     return bean;
-  };
+  }
 
-  transformBeansSection = (beansSection: Element): BeanFactory[] => {
+  static parseBeanConstructors(beanElement: Element): { [key: string]: string } | undefined {
+    let constructors: { [key: string]: string } = {};
+    const constructorsElement = beanElement.getElementsByTagName('constructors')[0];
+
+    if (!constructorsElement) return undefined;
+
+    Array.from(constructorsElement.children).forEach((constructorElement) => {
+      const constructorIndex = constructorElement.getAttribute('index');
+      const constructorValue = constructorElement.getAttribute('value');
+
+      if (constructorIndex && constructorValue) {
+        constructors = { ...constructors, [constructorIndex]: constructorValue };
+      }
+    });
+
+    return constructors;
+  }
+
+  static parseBeanProperties(beanElement: Element): { [key: string]: string } | undefined {
+    const propertiesElement = beanElement.getElementsByTagName('properties')[0];
+    if (!propertiesElement) return undefined;
+
+    let properties: { [key: string]: string } = {};
+
+    Array.from(beanElement.getElementsByTagName('properties')[0].children).forEach((propertyElement) => {
+      const propName = propertyElement.getAttribute('key') || propertyElement.getAttribute('name');
+      const propValue = propertyElement.getAttribute('value') || propertyElement.getAttribute('ref');
+
+      if (propName && propValue) {
+        properties = { ...properties, [propName]: propValue };
+      }
+    });
+
+    return properties;
+  }
+
+  //todo add support for nested beans, if not change to static
+  transformBeansSection(beansSection: Element): BeanFactory[] {
     // Process all bean elements and populate beanFactories
     this.beans = [];
     const beanElements = Array.from(beansSection.children);
 
     beanElements.forEach((beanElement) => {
-      const processedBean = this.transformBeanFactory(beanElement);
+      const processedBean = BeansXmlParser.transformBeanFactory(beanElement);
       this.beans.push(processedBean);
     });
 
     return this.beans;
-  };
+  }
 }
