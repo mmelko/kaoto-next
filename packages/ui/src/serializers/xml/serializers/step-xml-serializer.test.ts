@@ -63,7 +63,7 @@ import {
 import { formatXml } from '../xml-utils';
 import { StepXmlSerializer } from './step-xml-serializer';
 
-const normalizeLineEndings = (str: string): string => {
+export const normalizeLineEndings = (str: string): string => {
   return str
     .replace(/\r\n|\r|\n/g, '\n')
     .replace(/\s+/g, ' ')

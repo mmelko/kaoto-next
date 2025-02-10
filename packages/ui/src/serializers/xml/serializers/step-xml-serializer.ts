@@ -16,16 +16,46 @@
  */
 
 import { CamelCatalogService, CatalogKind, ICamelProcessorProperty } from '../../../models';
-import { PROCESSOR_NAMES } from '../xml-utils';
+import { ARRAY_TYPE_NAMES, PROCESSOR_NAMES } from '../xml-utils';
 import { ExpressionXmlSerializer } from './expression-xml-serializer';
 import { CamelComponentSchemaService } from '../../../models/visualization/flows/support/camel-component-schema.service';
 import { CamelUriHelper, ParsedParameters } from '../../../utils';
 import { DoTry } from '@kaoto/camel-catalog/types';
 
 export class StepXmlSerializer {
+  static serializeObjectProperties(
+    element: Element,
+    doc: Document,
+    processor: { [key: string]: unknown },
+    properties: Record<string, ICamelProcessorProperty>,
+    routeParent?: Element,
+  ) {
+    for (const [key, props] of Object.entries(properties)) {
+      switch (props.kind) {
+        case 'value':
+          element.textContent = processor;
+          break;
+
+        case 'attribute':
+          this.serializeAttribute(element, key, processor, processor[key]);
+          break;
+
+        case 'expression':
+          ExpressionXmlSerializer.serialize(key, processor[key], doc, element, routeParent);
+          break;
+
+        case 'element':
+          this.serializeElementType(element, key, processor, props, doc, routeParent);
+          break;
+      }
+    }
+  }
+
   static serialize(elementName: string, obj: { [key: string]: unknown }, doc: Document, parent?: Element): Element {
     const element = doc.createElement(elementName);
 
+    //unidentified might be when a new element is added from the form
+    if (!obj) return;
     if (obj[elementName]) {
       // for cases like errorHandler, intercept in the route configuration etc where the element is nested i.e intercept:{intercept:{...}}
       obj = obj[elementName];
@@ -42,45 +72,8 @@ export class StepXmlSerializer {
     }
 
     const processor = obj as { [key: string]: unknown };
+    this.serializeObjectProperties(element, doc, processor, properties, routeParent);
 
-    for (const [key, props] of Object.entries(properties)) {
-      switch (props.kind) {
-        case 'attribute':
-          this.serializeAttribute(element, key, processor, processor[key]);
-          break;
-
-        case 'expression':
-          ExpressionXmlSerializer.serialize(key, processor[key], doc, element, routeParent);
-          break;
-
-        case 'element':
-          this.serializeElementType(element, key, processor, props, doc, routeParent);
-          break;
-      }
-
-      //   // parse object cases
-      //   else if (typeof value === 'object' && key !== 'parameters') {
-      //     let childElement;
-      //     switch (key) {
-      //       case 'properties':
-      //         childElement = this.convertPropertiesToXml(value, doc);
-      //         break;
-      //       case 'constructors':
-      //         childElement = this.convertConstructorsToXml(value, doc);
-      //         break;
-      //       default:
-      //         childElement = this.convertToXmlElement(key, value, doc, parent);
-      //         break;
-      //     }
-      //     // element.appendChild(childElement!);
-      //     if (childElement.tagName === element.tagName) {
-      //       element = childElement;
-      //     } else {
-      //       element.appendChild(childElement);
-      //     }
-      //   }
-      // }
-    }
     if (elementName === 'doTry') {
       this.decorateDoTry(obj, element, doc);
     }
@@ -107,6 +100,8 @@ export class StepXmlSerializer {
     doc: Document,
     routeParent: Element,
   ) {
+    // skip serialization of map types usually they are handled differently
+    if (properties.javaType.includes('java.util.Map')) return;
     if (properties.type === 'array') {
       this.serializeArrayType(element, key, processor, properties, doc, routeParent);
     } else {
@@ -127,18 +122,28 @@ export class StepXmlSerializer {
       element.append(...steps);
       return;
     }
+    //handle special case like allowableValues
+    const childName = ARRAY_TYPE_NAMES.get(key) ?? key;
 
-    processor[key]?.forEach((v) => {
+    const children = processor[key]?.map((v) => {
       let childElement;
       if (props.javaType !== 'java.util.List<java.lang.String>') {
-        childElement = this.serialize(key, v, doc, routeParent);
+        childElement = this.serialize(childName, v, doc, routeParent);
       } else {
-        childElement = doc.createElement(key);
+        childElement = doc.createElement(childName);
         childElement.textContent = v;
       }
-
-      element.appendChild(childElement);
+      return childElement;
     });
+    if (!children || children.length === 0) return;
+
+    if (childName !== key) {
+      const arrayElement = doc.createElement(key);
+      arrayElement.append(...children);
+      element.appendChild(arrayElement);
+    } else {
+      element.append(...children);
+    }
   }
 
   private static serializeObjectType(
@@ -155,6 +160,7 @@ export class StepXmlSerializer {
       element.appendChild(childElement);
     }
   }
+
   s;
 
   static serializeSteps(steps: any[], doc: Document, routeParent: Element): Element[] {

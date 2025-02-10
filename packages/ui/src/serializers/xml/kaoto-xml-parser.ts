@@ -29,6 +29,17 @@ export function isXML(code: unknown): boolean {
 }
 
 export class KaotoXmlParser {
+  static readonly PARSABLE_ELEMENTS = [
+    'restConfiguration',
+    'routeTemplate',
+    'templatedRoute',
+    'errorHandler',
+    'intercept',
+    'interceptFrom',
+    'interceptSendToEndpoint',
+    'onCompletion',
+  ];
+
   routeXmlParser: RouteXmlParser;
   beanParser: BeansXmlParser;
 
@@ -84,18 +95,7 @@ export class KaotoXmlParser {
     const rootCamelElement = xmlDoc.getElementsByTagName('camel')[0];
     const children = rootCamelElement ? rootCamelElement.children : xmlDoc.children;
     Array.from(children).forEach((child) => {
-      if (
-        [
-          'restConfiguration',
-          'routeTemplate',
-          'templatedRoute',
-          'errorHandler',
-          'intercept',
-          'interceptFrom',
-          'interceptSendToEndpoint',
-          'onCompletion',
-        ].includes(child.tagName)
-      ) {
+      if (KaotoXmlParser.PARSABLE_ELEMENTS.includes(child.tagName)) {
         const entity = StepParser.parseElement(child);
         if (entity) {
           rawEntities.push({ [child.tagName]: entity });

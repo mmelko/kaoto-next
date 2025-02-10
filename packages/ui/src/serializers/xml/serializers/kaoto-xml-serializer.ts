@@ -17,6 +17,7 @@
 
 import { BaseCamelEntity, EntityType } from '../../../models/camel/entities';
 import { StepXmlSerializer } from './step-xml-serializer';
+import { RestXmlSerializer } from './rest-xml-serializer';
 
 export class KaotoXmlSerializer {
   // General helper for creating elements with nested structure
@@ -62,21 +63,32 @@ export class KaotoXmlSerializer {
     entityDefinitions.forEach((entity) => {
       const entityType = entity.type;
 
-      if (entityType === EntityType.Beans) {
-        entity.parent.beans.forEach((bean) => {
-          beans.appendChild(this.convertToXmlElement('bean', bean, doc));
-        });
-        return;
-      } else if (entityType === EntityType.Route) {
-        const routeElement = this.serializeRoute(entity.entityDef[EntityType.Route], doc);
-        rootElement.appendChild(routeElement);
-        return;
+      switch (entity.type) {
+        case EntityType.Beans:
+          entity.beans.forEach((bean) => {
+            beans.appendChild(StepXmlSerializer.serialize('bean', bean, doc));
+          });
+          break;
+        case EntityType.Route:
+          {
+            const routeElement = this.serializeRoute(entity.entityDef[EntityType.Route], doc);
+            rootElement.appendChild(routeElement);
+          }
+          break;
+        case EntityType.ErrorHandler:
+          {
+            const element = StepXmlSerializer.serialize(entityType, entity.errorHandlerDef, doc, rootElement);
+            rootElement.appendChild(element);
+          }
+          break;
+        case EntityType.Rest:
+          rootElement.appendChild(RestXmlSerializer.serialize(entity.entityDef[entityType], doc));
+          break;
+        case defaut: {
+          const element = StepXmlSerializer.serialize(entityType, entity.entityDef[entityType], doc, rootElement);
+          rootElement.appendChild(element);
+        }
       }
-
-      const elementData =
-        entityType === EntityType.ErrorHandler ? entity.errorHandlerDef : entity.entityDef[entityType];
-      const element = StepXmlSerializer.serialize(entityType, elementData, doc, rootElement);
-      rootElement.appendChild(element);
     });
 
     if (beans.hasChildNodes()) rootElement.appendChild(beans);
