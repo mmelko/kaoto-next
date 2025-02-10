@@ -7,6 +7,8 @@ import { CamelYamlDsl, Integration, Kamelet, KameletBinding, Pipe } from '@kaoto
 import { EntityType } from '../models/camel/entities';
 
 export class XmlCamelResourceSerializer implements CamelResourceSerializer {
+  private comments: string[] = [];
+
   getLabel(): string {
     return 'XML';
   }
@@ -14,11 +16,13 @@ export class XmlCamelResourceSerializer implements CamelResourceSerializer {
   static isApplicable(code: unknown): boolean {
     return isXML(code as string);
   }
+
   xmlSerializer: XMLSerializer = new XMLSerializer();
 
   parse(code: unknown): CamelYamlDsl | Integration | Kamelet | KameletBinding | Pipe {
     const xmlParser = new KaotoXmlParser();
     const entities = xmlParser.parseXML(code as string);
+    this.extractComments(code as string);
     return entities as CamelYamlDsl;
   }
 
@@ -27,14 +31,33 @@ export class XmlCamelResourceSerializer implements CamelResourceSerializer {
     entities.push(...resource.getVisualEntities());
 
     const xmlDocument = KaotoXmlSerializer.serialize(entities);
-    return formatXml(this.xmlSerializer.serializeToString(xmlDocument));
+    let xmlString = this.xmlSerializer.serializeToString(xmlDocument);
+
+    xmlString = this.insertComments(xmlString);
+
+    return formatXml(xmlString);
   }
 
   getComments(): string[] {
-    return [];
+    return this.comments;
   }
 
-  setComments(_comments: string[]): void {
-    //TODO implement
+  setComments(comments: string[]): void {
+    this.comments = comments;
+  }
+
+  private extractComments(xml: string): void {
+    const commentRegex = /<!--([\s\S]*?)-->/g;
+    const rootTagRegex = /<\w+>/;
+
+    this.comments = [];
+    const preRootContent = xml.split(rootTagRegex)[0];
+    const matches = preRootContent.match(commentRegex) || [];
+
+    this.comments = matches.map((match) => match.replace(/^<!--\s*|-->\s*$/g, '').trim());
+  }
+  private insertComments(xml: string): string {
+    const commentsString = this.comments.map((comment) => `<!-- ${comment} -->`).join('\n');
+    return commentsString ? commentsString + '\n' + xml : xml;
   }
 }
