@@ -16,7 +16,7 @@
 
 import { DoCatch, DoTry, ProcessorDefinition, When1 as When } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind, ICamelProcessorProperty } from '../../../models';
-import { ARRAY_TYPE_NAMES, extractAttributes, PROCESSOR_NAMES } from '../xml-utils';
+import { ARRAY_TYPE_NAMES, extractAttributesFromXmlElement, PROCESSOR_NAMES } from '../xml-utils';
 import { ExpressionParser } from './expression-parser';
 
 export type ElementTransformer = (element: Element) => unknown;
@@ -45,7 +45,7 @@ export class StepParser {
 
     //Some elements are not defined in the catalog even if they are defined in the schemas, so we need to extract them as plain objects
     if (!processorModel) {
-      return extractAttributes(element);
+      return extractAttributesFromXmlElement(element);
     }
 
     const processor: { [key: string]: unknown } = {};
@@ -150,7 +150,7 @@ export class StepParser {
     const arrayElementName = ARRAY_TYPE_NAMES.get(name) ?? name;
 
     const children = name === arrayElementName ? element.children : element.getElementsByTagName(name)[0]?.children;
-    if (!children) undefined;
+    if (!children) return [];
 
     return (
       Array.from(children)

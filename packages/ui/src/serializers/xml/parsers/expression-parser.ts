@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { collectNamespaces, extractAttributes } from '../xml-utils';
+import { collectNamespaces, extractAttributesFromXmlElement } from '../xml-utils';
 import { CamelCatalogService, CatalogKind, ICamelProcessorProperty } from '../../../models';
 import { ExpressionDefinition } from '@kaoto/camel-catalog/types';
 
@@ -44,7 +44,7 @@ export class ExpressionParser {
       expressionType,
     )?.properties;
 
-    const expressionAttributes = extractAttributes(expressionElement, expressionTypeProperties);
+    const expressionAttributes = extractAttributesFromXmlElement(expressionElement, expressionTypeProperties);
     const namespaces = expressionTypeProperties?.namespace ? collectNamespaces(expressionElement) : [];
 
     return {

@@ -51,7 +51,7 @@ describe('BeanXmlParser', () => {
   });
 
   it('parse Properties correctly ', () => {
-    const interceptFromElement = getElementFromXml(`<bean> <properties>
+    const beanProperties = getElementFromXml(`<bean> <properties>
             <property key="field1" value="f1_p" />
             <property key="field2" value="f2_p" />
             <property key="nested.field1" value="nf1_p" />
@@ -59,7 +59,7 @@ describe('BeanXmlParser', () => {
         </properties>
     </bean>`);
 
-    const result = BeansXmlParser.parseBeanProperties(interceptFromElement);
+    const result = BeansXmlParser.parseBeanProperties(beanProperties);
     expect(result).toEqual({
       field1: 'f1_p',
       field2: 'f2_p',

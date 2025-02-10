@@ -32,7 +32,7 @@ export function extractAttributesTyped<T>(element: Element): Partial<T> {
   return attributes;
 }
 
-export function extractAttributes(
+export function extractAttributesFromXmlElement(
   element: Element,
   properties?: Record<string, ICamelProcessorProperty>,
 ): { [p: string]: unknown } {
@@ -82,6 +82,11 @@ export function formatXml(xml: string): string {
   let pad = 0;
 
   xml = xml.replace(reg, '$1\r\n$2$3');
+  xml
+    .replace(/\r\n/g, '\n') // Normalize line endings
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, '')
+    .trim();
 
   return xml
     .split('\r\n')

@@ -15,7 +15,7 @@
  */
 
 import { Param, ResponseMessage, Rest, RestSecurity } from '@kaoto/camel-catalog/types';
-import { extractAttributes } from '../xml-utils';
+import { extractAttributesFromXmlElement } from '../xml-utils';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { RouteXmlParser } from './route-xml-parser';
 import { StepParser } from './step-parser';
@@ -27,7 +27,7 @@ export class RestXmlParser {
     const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'rest')?.properties;
 
     return {
-      ...extractAttributes(restElement, properties),
+      ...extractAttributesFromXmlElement(restElement, properties),
       ...this.parseRestVerbs(restElement),
     };
   }

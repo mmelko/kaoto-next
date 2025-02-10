@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { extractAttributes } from '../xml-utils';
+import { extractAttributesFromXmlElement } from '../xml-utils';
 import { BeanFactory } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 
@@ -24,7 +24,7 @@ export class BeansXmlParser {
   static transformBeanFactory(beanElement: Element): BeanFactory {
     // Initialize the bean object
     const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'beanFactory')?.properties;
-    const bean: BeanFactory = extractAttributes(beanElement, properties) as unknown as BeanFactory;
+    const bean: BeanFactory = extractAttributesFromXmlElement(beanElement, properties) as unknown as BeanFactory;
 
     // Special case for 'name/id' and 'type/class'
     const name = beanElement.getAttribute('id');
