@@ -48,14 +48,18 @@ export class XmlCamelResourceSerializer implements CamelResourceSerializer {
 
   private extractComments(xml: string): void {
     const commentRegex = /<!--([\s\S]*?)-->/g;
-    const rootTagRegex = /<\w+>/;
-
     this.comments = [];
-    const preRootContent = xml.split(rootTagRegex)[0];
-    const matches = preRootContent.match(commentRegex) || [];
+    let match;
 
-    this.comments = matches.map((match) => match.replace(/^<!--\s*|-->\s*$/g, '').trim());
+    while ((match = commentRegex.exec(xml)) !== null) {
+      if (xml.slice(0, match.index).trim() === '') {
+        this.comments.push(match[1].trim());
+      } else {
+        break;
+      }
+    }
   }
+
   private insertComments(xml: string): string {
     const commentsString = this.comments.map((comment) => `<!-- ${comment} -->`).join('\n');
     return commentsString ? commentsString + '\n' + xml : xml;

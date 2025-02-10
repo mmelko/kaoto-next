@@ -33,8 +33,7 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
   serialize(resource: CamelResource): string {
     let code = stringify(resource, { sortMapEntries: resource.sortFn, schema: 'yaml-1.1' }) || '';
     if (this.comments.length > 0) {
-      const comments = this.comments.join('\n');
-      code = comments + '\n' + code;
+      code = this.insertComments(code);
     }
     return code;
   }
@@ -56,11 +55,18 @@ export class YamlCamelResourceSerializer implements CamelResourceSerializer {
     const comments: string[] = [];
     for (const line of lines) {
       if (line.trim() === '' || YamlCamelResourceSerializer.COMMENTED_LINES_REGEXP.test(line)) {
-        comments.push(line);
+        comments.push(line.replace(/^\s*#\s*/, ''));
       } else {
         break;
       }
     }
     return comments;
+  }
+
+  private insertComments(xml: string): string {
+    const commentsString = this.comments
+      .flatMap((comment) => comment.split('\n').map((line) => `# ${line}`))
+      .join('\n');
+    return commentsString + '\n' + xml;
   }
 }
