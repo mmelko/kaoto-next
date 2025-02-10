@@ -23,6 +23,13 @@ export const ContextToolbar: FunctionComponent = () => {
       <FlowsMenu />
     </ToolbarItem>,
   ];
+  if (currentSchemaType === SourceSchemaType.Route) {
+    toolbarItems.unshift(
+      <ToolbarItem key="toolbar-serializer-selector">
+        <SerializerSelector />
+      </ToolbarItem>,
+    );
+  }
 
   if (isMultipleRoutes) {
     toolbarItems.push(
@@ -31,13 +38,7 @@ export const ContextToolbar: FunctionComponent = () => {
       </ToolbarItem>,
     );
   }
-  if (currentSchemaType === SourceSchemaType.Route) {
-    toolbarItems.push(
-      <ToolbarItem key="toolbar-serializer-selector">
-        <SerializerSelector />
-      </ToolbarItem>,
-    );
-  }
+
   return (
     <Toolbar>
       <ToolbarContent>
