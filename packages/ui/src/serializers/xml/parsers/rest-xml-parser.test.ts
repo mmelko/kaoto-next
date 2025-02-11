@@ -29,6 +29,14 @@ describe('Rest XML Parser', () => {
   it('should parse rest verbs correctly', () => {
     const xml = `
 <rest path="/say" xmlns="http://camel.apache.org/schema/spring">
+ <securityDefinitions>
+            <oauth2 key="oauth2" flow="applicaation" tokenUrl="{{oauth.token.url}}">
+                             <scopes key="{{oauth.scope.service.self}}"
+                         value="{{oauth.scope.service.self}}"/>
+                 <scopes key="{{oauth.scope.test.person.data}}"
+                         value="{{oauth.scope.test.person.data}}"/>
+             </oauth2>
+         </securityDefinitions>
     <get path="/hello">
         <param name="name" type="query" required="true" />
         <param name="name2" type="query" required="true" defaultValue="blah"/>
@@ -53,6 +61,18 @@ describe('Rest XML Parser', () => {
 
     expect(result).toEqual({
       path: '/say',
+      securityDefinitions: {
+        oauth2: {
+          key: 'oauth2',
+          flow: 'application',
+          tokenUrl: '{{oauth.token.url}}',
+          scopes: [
+            { key: '{{oauth.scope.service.self}}', value: '{{oauth.scope.service.self}}' },
+            { key: '{{oauth.scope.test.person.data}}', value: '{{oauth.scope.test.person.data}}' },
+          ],
+        },
+      },
+
       get: [
         {
           path: '/hello',

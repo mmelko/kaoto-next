@@ -148,22 +148,23 @@ export class StepParser {
     transformer?: ElementTransformer,
   ): unknown[] {
     const arrayElementName = ARRAY_TYPE_NAMES.get(name) ?? name;
+    let children;
+    if (properties.oneOf) {
+      children = Array.from(element.children).filter((e) => properties.oneOf!.includes(e.tagName));
+    } else {
+      children = name === arrayElementName ? element.children : element.getElementsByTagName(name)[0]?.children;
+      // we need to filter only direct children because getElementsByTagName returns all descendants
+      if (children) children = Array.from(children).filter((e) => e.tagName === arrayElementName);
+    }
 
-    const children = name === arrayElementName ? element.children : element.getElementsByTagName(name)[0]?.children;
     if (!children) return [];
 
-    return (
-      Array.from(children)
-
-        // we need to filter only direct children because getElementsByTagName returns all descendants
-        .filter((e) => e.tagName === arrayElementName)
-        .map((el) =>
-          properties.javaType === 'java.util.List<java.lang.String>'
-            ? el.textContent
-            : transformer
-              ? transformer(el)
-              : this.parseElement(el),
-        )
+    return Array.from(children).map((el) =>
+      properties.javaType === 'java.util.List<java.lang.String>'
+        ? el.textContent
+        : transformer
+          ? transformer(el)
+          : this.parseElement(el),
     );
   }
 

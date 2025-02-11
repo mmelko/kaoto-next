@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Param, ResponseMessage, Rest, RestSecurity } from '@kaoto/camel-catalog/types';
+import { Param, ResponseMessage, Rest, RestSecurity, SecurityDefinitions } from '@kaoto/camel-catalog/types';
 import { extractAttributesFromXmlElement } from '../xml-utils';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { RouteXmlParser } from './route-xml-parser';
@@ -22,6 +22,7 @@ import { StepParser } from './step-parser';
 
 export class RestXmlParser {
   routeXmlParser = new RouteXmlParser();
+
   // Main transformation for <rest> elements
   static parse(restElement: Element): Rest {
     const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'rest')?.properties;
@@ -29,6 +30,8 @@ export class RestXmlParser {
     return {
       ...extractAttributesFromXmlElement(restElement, properties),
       ...this.parseRestVerbs(restElement),
+      securityDefinitions: this.parseSecurityDefinitions(restElement) as unknown as SecurityDefinitions,
+      securityRequirements: this.parseSecurityRequirements(restElement),
     };
   }
 
@@ -45,7 +48,7 @@ export class RestXmlParser {
       }
     });
 
-    return verbs; // Return the dynamically populated verbs object
+    return verbs as unknown as Rest;
   }
 
   static parseRestVerb(verbElement: Element) {
@@ -92,5 +95,36 @@ export class RestXmlParser {
     return Array.from(verbElement.getElementsByTagName('responseMessage')).map((responseMessageElement) => {
       return StepParser.parseElement(responseMessageElement) as ResponseMessage;
     });
+  }
+
+  private static parseSecurityDefinitions(restElement: Element): SecurityDefinitions | undefined {
+    const securityDefinitionsElements = Array.from(
+      restElement.getElementsByTagName('securityDefinitions')[0]?.children || [],
+    );
+
+    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'securityDefinitions')?.properties
+      .securityDefinitions;
+
+    let securityDefinitions: SecurityDefinitions = {};
+    if (securityDefinitionsElements.length === 0) return undefined;
+    securityDefinitionsElements
+      .filter((el) => properties?.oneOf?.includes(el.tagName))
+      .forEach((securityDefinition) => {
+        securityDefinitions = {
+          ...securityDefinitions,
+          [securityDefinition.tagName]: StepParser.parseElement(securityDefinition),
+        };
+      });
+    return securityDefinitions;
+  }
+
+  private static parseSecurityRequirements(restElement: Element): RestSecurity[] | undefined {
+    const securityRequirements = restElement.getElementsByTagName('securityRequirements')[0];
+    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'rest')?.properties;
+
+    if (securityRequirements) {
+      StepParser.parseElementsArray('security', restElement, properties!.securityRequirements);
+    }
+    return undefined;
   }
 }
