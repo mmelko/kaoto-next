@@ -18,6 +18,8 @@
 import { BaseCamelEntity, EntityType } from '../../../models/camel/entities';
 import { StepXmlSerializer } from './step-xml-serializer';
 import { RestXmlSerializer } from './rest-xml-serializer';
+import { BeansEntity } from '../../../models/visualization/metadata';
+import { BeansXmlSerializer } from './beans-xml-serializer';
 
 export class KaotoXmlSerializer {
   // General helper for creating elements with nested structure
@@ -65,8 +67,8 @@ export class KaotoXmlSerializer {
 
       switch (entity.type) {
         case EntityType.Beans:
-          entity.beans.forEach((bean) => {
-            beans.appendChild(StepXmlSerializer.serialize('bean', bean, doc));
+          (entity as BeansEntity).parent.beans.forEach((bean) => {
+            beans.appendChild(BeansXmlSerializer.serialize(bean, doc));
           });
           break;
         case EntityType.Route:

@@ -15,10 +15,11 @@
  */
 import catalogLibrary from '@kaoto/camel-catalog/index.json';
 import { KaotoXmlSerializer } from './kaoto-xml-serializer';
-import { BaseCamelEntity } from '../../../models/camel/entities';
+import { BaseCamelEntity, EntityType } from '../../../models/camel/entities';
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CatalogLibrary } from '@kaoto/camel-catalog/types';
+import { normalizeXml } from './serializer-test-utils';
 
 describe('ToXMLConverter', () => {
   let domParser: DOMParser;
@@ -69,5 +70,39 @@ describe('ToXMLConverter', () => {
 
     const result = KaotoXmlSerializer.serialize([entity as unknown as BaseCamelEntity]);
     expect(xmlSerializer.serializeToString(result)).toEqual(xmlSerializer.serializeToString(doc));
+  });
+
+  it('Convert beans ', () => {
+    const doc = domParser.parseFromString(
+      `<camel>
+<beans>
+  <bean name="test" type="bean" destroyMethod="destroy" factoryBean="ff" builderClass="com.example.MyBean">
+    <properties>
+      <property key="1" value="2"/>
+    </properties>
+  </bean>
+</beans>
+</camel>`,
+      'application/xml',
+    );
+
+    const entity = {
+      type: EntityType.Beans,
+      parent: {
+        beans: [
+          {
+            name: 'test',
+            type: 'bean',
+            destroyMethod: 'destroy',
+            factoryBean: 'ff',
+            builderClass: 'com.example.MyBean',
+            properties: { 1: '2' },
+          },
+        ],
+      },
+    };
+
+    const result = KaotoXmlSerializer.serialize([entity as unknown as BaseCamelEntity]);
+    expect(xmlSerializer.serializeToString(result)).toEqual(normalizeXml(xmlSerializer.serializeToString(doc)));
   });
 });
