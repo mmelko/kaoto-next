@@ -1,4 +1,3 @@
-// @ts-nocheck
 /*
  * Copyright (C) 2023 Red Hat, Inc.
  *
@@ -15,47 +14,47 @@
  * limitations under the License.
  */
 
-import { BaseCamelEntity, EntityType } from '../../../models/camel/entities';
-import { StepXmlSerializer } from './step-xml-serializer';
+import { EntityType } from '../../../models/camel/entities';
+import { ElementType, StepXmlSerializer } from './step-xml-serializer';
 import { RestXmlSerializer } from './rest-xml-serializer';
 import { BeansEntity } from '../../../models/visualization/metadata';
 import { BeansXmlSerializer } from './beans-xml-serializer';
+import { RouteDefinition } from '@kaoto/camel-catalog/types';
+import { CamelRouteVisualEntity } from '../../../models';
+import { CamelErrorHandlerVisualEntity } from '../../../models/visualization/flows/camel-error-handler-visual-entity';
+import { CamelRestVisualEntity } from '../../../models/visualization/flows/camel-rest-visual-entity';
+import { CamelInterceptFromVisualEntity } from '../../../models/visualization/flows/camel-intercept-from-visual-entity';
+import { CamelInterceptSendToEndpointVisualEntity } from '../../../models/visualization/flows/camel-intercept-send-to-endpoint-visual-entity';
+import { CamelInterceptVisualEntity } from '../../../models/visualization/flows/camel-intercept-visual-entity';
+import { CamelRouteConfigurationVisualEntity } from '../../../models/visualization/flows/camel-route-configuration-visual-entity';
+import { CamelOnCompletionVisualEntity } from '../../../models/visualization/flows/camel-on-completion-visual-entity';
+import { CamelOnExceptionVisualEntity } from '../../../models/visualization/flows/camel-on-exception-visual-entity';
+import { CamelRestConfigurationVisualEntity } from '../../../models/visualization/flows/camel-rest-configuration-visual-entity';
+
+export type EntityDefinition =
+  | CamelRouteVisualEntity
+  | CamelErrorHandlerVisualEntity
+  | CamelRestVisualEntity
+  | BeansEntity
+  | CamelInterceptFromVisualEntity
+  | CamelInterceptSendToEndpointVisualEntity
+  | CamelInterceptVisualEntity
+  | CamelRouteConfigurationVisualEntity
+  | CamelOnCompletionVisualEntity
+  | CamelOnExceptionVisualEntity
+  | CamelRestConfigurationVisualEntity;
 
 export class KaotoXmlSerializer {
-  // General helper for creating elements with nested structure
-
   static serializeRoute(route: RouteDefinition, doc: Document): Element {
-    const routeElement = StepXmlSerializer.serialize('route', route, doc);
+    const routeElement = StepXmlSerializer.serialize('route', route as unknown as { [key: string]: unknown }, doc);
 
-    const steps = StepXmlSerializer.serializeSteps(route.from.steps, doc, routeElement);
+    const steps = StepXmlSerializer.serializeSteps(route.from.steps as ElementType[], doc, routeElement);
     routeElement.append(...steps);
 
     return routeElement;
   }
 
-  static convertPropertiesToXml(properties: unknown, doc: Document): Element {
-    const propertiesElement = doc.createElement('properties');
-    for (const [key, value] of Object.entries(properties)) {
-      const propertyElement = doc.createElement('property');
-      propertyElement.setAttribute('key', key);
-      propertyElement.setAttribute('value', value);
-      propertiesElement.appendChild(propertyElement);
-    }
-    return propertiesElement;
-  }
-
-  convertConstructorsToXml = (constructors: unknown, doc: Document): Element => {
-    const constructorsElement = doc.createElement('constructors');
-    for (const [key, value] of Object.entries(constructors)) {
-      const constructorElement = doc.createElement('constructor');
-      constructorElement.setAttribute('index', key);
-      constructorElement.setAttribute('value', value);
-      constructorsElement.appendChild(constructorElement);
-    }
-    return constructorsElement;
-  };
-
-  static serialize(entityDefinitions: BaseCamelEntity[]): Document {
+  static serialize(entityDefinitions: EntityDefinition[]): Document {
     const parser = new DOMParser();
     const doc: XMLDocument = parser.parseFromString('<camel></camel>', 'text/xml');
 
@@ -67,8 +66,9 @@ export class KaotoXmlSerializer {
 
       switch (entity.type) {
         case EntityType.Beans:
-          (entity as BeansEntity).parent.beans.forEach((bean) => {
-            beans.appendChild(BeansXmlSerializer.serialize(bean, doc));
+          entity.parent.beans.forEach((bean) => {
+            const beanElement = BeansXmlSerializer.serialize(bean, doc);
+            if (beanElement) beans.appendChild(beanElement);
           });
           break;
         case EntityType.Route:
@@ -84,10 +84,23 @@ export class KaotoXmlSerializer {
           }
           break;
         case EntityType.Rest:
-          rootElement.appendChild(RestXmlSerializer.serialize(entity.entityDef[entityType], doc));
+          rootElement.appendChild(RestXmlSerializer.serialize(entity.restDef, doc));
           break;
-        case defaut: {
-          const element = StepXmlSerializer.serialize(entityType, entity.entityDef[entityType], doc, rootElement);
+
+        case EntityType.RestConfiguration:
+          {
+            const element = StepXmlSerializer.serialize(entityType, entity.restConfigurationDef, doc, rootElement);
+            rootElement.appendChild(element);
+          }
+          break;
+
+        case EntityType.Intercept:
+        case EntityType.InterceptFrom:
+        case EntityType.InterceptSendToEndpoint:
+        case EntityType.OnCompletion:
+        case EntityType.RouteConfiguration:
+        case EntityType.OnException: {
+          const element = StepXmlSerializer.serialize(entityType, entity.entityDef, doc, rootElement);
           rootElement.appendChild(element);
         }
       }

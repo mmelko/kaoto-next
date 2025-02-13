@@ -15,11 +15,13 @@
  */
 import catalogLibrary from '@kaoto/camel-catalog/index.json';
 import { KaotoXmlSerializer } from './kaoto-xml-serializer';
-import { BaseCamelEntity, EntityType } from '../../../models/camel/entities';
-import { CamelCatalogService, CatalogKind } from '../../../models';
+import { EntityType } from '../../../models/camel/entities';
+import { CamelCatalogService, CamelRouteVisualEntity, CatalogKind } from '../../../models';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { normalizeXml } from './serializer-test-utils';
+import { BeansEntity } from '../../../models/visualization/metadata';
+import { CamelErrorHandlerVisualEntity } from '../../../models/visualization/flows/camel-error-handler-visual-entity';
 
 describe('ToXMLConverter', () => {
   let domParser: DOMParser;
@@ -48,7 +50,7 @@ describe('ToXMLConverter', () => {
       },
     };
 
-    const result = KaotoXmlSerializer.serialize([entity as unknown as BaseCamelEntity]);
+    const result = KaotoXmlSerializer.serialize([entity as unknown as CamelRouteVisualEntity]);
     expect(xmlSerializer.serializeToString(result)).toEqual(xmlSerializer.serializeToString(doc));
   });
 
@@ -68,7 +70,7 @@ describe('ToXMLConverter', () => {
       },
     };
 
-    const result = KaotoXmlSerializer.serialize([entity as unknown as BaseCamelEntity]);
+    const result = KaotoXmlSerializer.serialize([entity as unknown as CamelErrorHandlerVisualEntity]);
     expect(xmlSerializer.serializeToString(result)).toEqual(xmlSerializer.serializeToString(doc));
   });
 
@@ -102,7 +104,7 @@ describe('ToXMLConverter', () => {
       },
     };
 
-    const result = KaotoXmlSerializer.serialize([entity as unknown as BaseCamelEntity]);
+    const result = KaotoXmlSerializer.serialize([entity as unknown as BeansEntity]);
     expect(xmlSerializer.serializeToString(result)).toEqual(normalizeXml(xmlSerializer.serializeToString(doc)));
   });
 });

@@ -15,64 +15,63 @@
  */
 
 import catalogLibrary from '@kaoto/camel-catalog/index.json';
-import { RestXmlParser } from './rest-xml-parser';
+import { describe } from 'node:test';
 import { getFirstCatalogMap } from '../../../stubs/test-load-catalog';
 import { CatalogLibrary } from '@kaoto/camel-catalog/types';
 import { CamelCatalogService, CatalogKind } from '../../../models';
+import { getDocument, testSerializer } from './serializer-test-utils';
+import { RestXmlSerializer } from './rest-xml-serializer';
 
-describe('Rest XML Parser', () => {
+describe('RestXmlParser tests', () => {
+  const doc = getDocument();
   beforeAll(async () => {
     const catalogsMap = await getFirstCatalogMap(catalogLibrary as CatalogLibrary);
     CamelCatalogService.setCatalogKey(CatalogKind.Processor, catalogsMap.modelCatalogMap);
   });
 
-  it('should parse rest verbs correctly', () => {
-    const xml = `
-<rest path="/say" xmlns="http://camel.apache.org/schema/spring">
- <securityDefinitions>
-            <oauth2 key="oauth2" flow="application" tokenUrl="{{oauth.token.url}}">
-                             <scopes key="{{oauth.scope.service.self}}"
-                         value="{{oauth.scope.service.self}}"/>
-                 <scopes key="{{oauth.scope.test.person.data}}"
-                         value="{{oauth.scope.test.person.data}}"/>
-             </oauth2>
-         </securityDefinitions>
+  it('serialize param', () => {
+    const entity = {
+      get: [
+        {
+          param: [
+            { name: 'name', type: 'query', required: 'true' },
+            { name: 'name2', type: 'query', required: 'true', defaultValue: 'blah' },
+          ],
+        },
+      ],
+    };
+    const expected = `<rest>
+    <get>
+       <param name="name" type="query" required="true"/>
+       <param name="name2" type="query" defaultValue="blah" required="true"/>
+    </get></rest>`;
+    const rest = RestXmlSerializer.serialize(entity, doc);
+    expect(rest).toBeDefined();
+    testSerializer(expected, rest!);
+  });
+
+  it('serialize full rest', () => {
+    const expected = `
+<rest path="/say">
     <get path="/hello">
-        <param name="name" type="query" required="true" />
-        <param name="name2" type="query" required="true" defaultValue="blah"/>
+    <to uri="direct:hello"/>
+        <param name="name" type="query" required="true"/>
+        <param name="name2" type="query" defaultValue="blah" required="true"/>
         <security key="hello" scopes="scope"/>
-        <responseMessage message="hello" code="200">
-         <examples key="example" value="value"/>
-          <examples key="example" value="value"/>
-          <header name="header" description="header" > 
+        <responseMessage code="200"  message="hello">
+          <header  description="header"  name="header">
             <allowableValues>
               <value>1</value>
               <value>2</value>
           </allowableValues>
         </header>
+        <examples key="example" value="value"/>
+          <examples key="example" value="value"/>
        </responseMessage>
-        <to uri="direct:hello"/>
     </get>
   </rest>`;
-
-    const doc = new DOMParser().parseFromString(xml, 'application/xml');
-    const restElement = doc.getElementsByTagName('rest')[0];
-    const result = RestXmlParser.parse(restElement);
-
-    expect(result).toEqual({
+    const entity = {
       path: '/say',
-      securityDefinitions: {
-        oauth2: {
-          key: 'oauth2',
-          flow: 'application',
-          tokenUrl: '{{oauth.token.url}}',
-          scopes: [
-            { key: '{{oauth.scope.service.self}}', value: '{{oauth.scope.service.self}}' },
-            { key: '{{oauth.scope.test.person.data}}', value: '{{oauth.scope.test.person.data}}' },
-          ],
-        },
-      },
-
       get: [
         {
           path: '/hello',
@@ -80,7 +79,6 @@ describe('Rest XML Parser', () => {
             { name: 'name', type: 'query', required: 'true' },
             { name: 'name2', type: 'query', required: 'true', defaultValue: 'blah' },
           ],
-
           security: [{ key: 'hello', scopes: 'scope' }],
           responseMessage: [
             {
@@ -102,6 +100,10 @@ describe('Rest XML Parser', () => {
           to: { uri: 'direct:hello' },
         },
       ],
-    });
+    };
+
+    const rest = RestXmlSerializer.serialize(entity, doc);
+    expect(rest).toBeDefined();
+    testSerializer(expected, rest!);
   });
 });

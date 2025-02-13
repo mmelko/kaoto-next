@@ -1,4 +1,3 @@
-// @ts-nocheck
 /*
  * Copyright (C) 2023 Red Hat, Inc.
  *
@@ -22,18 +21,20 @@ import { CamelComponentSchemaService } from '../../../models/visualization/flows
 import { CamelUriHelper, ParsedParameters } from '../../../utils';
 import { DoTry } from '@kaoto/camel-catalog/types';
 
+export type ElementType = { [key: string]: unknown; steps?: ElementType[] };
+
 export class StepXmlSerializer {
   static serializeObjectProperties(
     element: Element,
     doc: Document,
-    processor: { [key: string]: unknown },
+    processor: ElementType,
     properties: Record<string, ICamelProcessorProperty>,
     routeParent?: Element,
   ) {
     for (const [key, props] of Object.entries(properties)) {
       switch (props.kind) {
         case 'value':
-          element.textContent = processor;
+          element.textContent = processor as unknown as string;
           break;
 
         case 'attribute':
@@ -51,14 +52,14 @@ export class StepXmlSerializer {
     }
   }
 
-  static serialize(elementName: string, obj: { [key: string]: unknown }, doc: Document, parent?: Element): Element {
+  static serialize(elementName: string, obj: ElementType, doc: Document, parent?: Element): Element {
     const element = doc.createElement(elementName);
 
     //unidentified might be when a new element is added from the form
-    if (!obj) return;
+    if (!obj) return element;
     if (obj[elementName]) {
       // for cases like errorHandler, intercept in the route configuration etc where the element is nested i.e intercept:{intercept:{...}}
-      obj = obj[elementName];
+      obj = obj[elementName] as ElementType;
     }
     const routeParent = elementName === 'route' ? element : parent;
     const properties = CamelCatalogService.getComponent(
@@ -71,20 +72,20 @@ export class StepXmlSerializer {
       return element;
     }
 
-    const processor = obj as { [key: string]: unknown };
+    const processor = obj as ElementType;
     this.serializeObjectProperties(element, doc, processor, properties, routeParent);
 
     if (elementName === 'doTry') {
-      this.decorateDoTry(obj, element, doc);
+      this.decorateDoTry(obj as DoTry, element, doc);
     }
 
     return element;
   }
 
-  private static serializeUnknownType(element: Element, obj: unknown, doc: Document, routeParent: Element) {
+  private static serializeUnknownType(element: Element, obj: ElementType, doc: Document, routeParent?: Element) {
     for (const [key, value] of Object.entries(obj)) {
       if (typeof value === 'object') {
-        const childElement = this.serialize(key, value, doc, routeParent);
+        const childElement = this.serialize(key, value as ElementType, doc, routeParent);
         element.appendChild(childElement);
       } else {
         element.setAttribute(key, String(value));
@@ -95,10 +96,10 @@ export class StepXmlSerializer {
   private static serializeElementType(
     element: Element,
     key: string,
-    processor: any,
+    processor: ElementType,
     properties: ICamelProcessorProperty,
     doc: Document,
-    routeParent: Element,
+    routeParent?: Element,
   ) {
     // skip serialization of map types usually they are handled differently
     if (properties.javaType.includes('java.util.Map')) return;
@@ -112,31 +113,35 @@ export class StepXmlSerializer {
   private static serializeArrayType(
     element: Element,
     key: string,
-    processor: unknown,
+    processor: ElementType,
     props: ICamelProcessorProperty,
     doc: Document,
-    routeParent: Element,
+    routeParent?: Element,
   ) {
     if (key === 'outputs' && processor['steps']) {
       const steps = this.serializeSteps(processor['steps'], doc, routeParent);
       element.append(...steps);
       return;
     }
+    const value = processor[key];
+    if (!Array.isArray(value) || value.length === 0) return;
+
     //handle special case like allowableValues
     const childName = ARRAY_TYPE_NAMES.get(key) ?? key;
+    const isStringList = props.javaType === 'java.util.List<java.lang.String>';
 
-    const children = processor[key]?.map((v) => {
+    const children = (value as ElementType[]).map((v) => {
       let childElement;
-      if (props.javaType !== 'java.util.List<java.lang.String>') {
-        childElement = this.serialize(childName, v, doc, routeParent);
-      } else {
+      if (isStringList) {
         childElement = doc.createElement(childName);
-        childElement.textContent = v;
+        childElement.textContent = v as unknown as string;
+        return childElement;
       }
-      return childElement;
-    });
-    if (!children || children.length === 0) return;
 
+      return this.serialize(childName, v, doc, routeParent);
+    });
+
+    //  Append children based on naming convention
     if (childName !== key) {
       const arrayElement = doc.createElement(key);
       arrayElement.append(...children);
@@ -149,29 +154,28 @@ export class StepXmlSerializer {
   private static serializeObjectType(
     element: Element,
     key: string,
-    processor: any,
+    processor: ElementType,
     properties: ICamelProcessorProperty,
     doc: Document,
-    routeParent: Element,
+    routeParent?: Element,
   ) {
     const childElementKey = processor[key] ? key : properties.oneOf?.find((key) => processor[key] !== undefined);
     if (childElementKey) {
-      const childElement = this.serialize(childElementKey, processor[childElementKey], doc, routeParent);
+      const childElement = this.serialize(childElementKey, processor[childElementKey] as ElementType, doc, routeParent);
       element.appendChild(childElement);
     }
   }
 
-  s;
-
-  static serializeSteps(steps: any[], doc: Document, routeParent: Element): Element[] {
+  static serializeSteps(steps: ElementType[], doc: Document, routeParent?: Element): Element[] {
     const stepElements: Element[] = [];
 
     steps.forEach((step) => {
       Object.entries(step).forEach(([stepKey, stepValue]) => {
-        const stepElement = this.serialize(stepKey, stepValue, doc, routeParent);
-        if (stepValue.uri) {
-          const uri = this.createUriFromParameters(stepValue);
-          stepElement.setAttribute('uri', uri);
+        const step = stepValue as ElementType;
+        const stepElement = this.serialize(stepKey, step, doc, routeParent);
+        if (step.uri) {
+          const uri = this.createUriFromParameters(step);
+          stepElement.setAttribute('uri', uri as string);
         }
         stepElements.push(stepElement);
       });
@@ -179,10 +183,11 @@ export class StepXmlSerializer {
     return stepElements;
   }
 
-  static createUriFromParameters(step: any) {
+  static createUriFromParameters(step: ElementType): string {
+    const uri = step.uri as string;
     const camelElementLookup = CamelComponentSchemaService.getCamelComponentLookup('from', step);
     if (camelElementLookup.componentName === undefined) {
-      return step.uri;
+      return uri;
     }
 
     const catalogLookup = CamelCatalogService.getCatalogLookup(camelElementLookup.componentName);
@@ -200,31 +205,36 @@ export class StepXmlSerializer {
       }
 
       return CamelUriHelper.getUriStringFromParameters(
-        step.uri,
+        uri,
         catalogLookup.definition.component.syntax,
-        step.parameters,
+        step.parameters as ParsedParameters,
         {
           requiredParameters,
           defaultValues,
         },
       );
     }
-    return step.uri;
+    return uri;
   }
 
-  private static serializeAttribute(element: Element, key: string, processor: unknown, attributeValue: unknown): void {
+  private static serializeAttribute(
+    element: Element,
+    key: string,
+    processor: ElementType,
+    attributeValue: unknown,
+  ): void {
     if (attributeValue) {
-      const value = key === 'uri' ? this.createUriFromParameters(processor) : attributeValue;
+      const value = key === 'uri' ? this.createUriFromParameters(processor) : (attributeValue as string);
       element.setAttribute(key, value);
     }
   }
 
   static decorateDoTry(doTry: DoTry, doTryElement: Element, doc: Document): Element {
     doTry.doCatch?.forEach((doCatch) => {
-      doTryElement.append(this.serialize('doCatch', doCatch, doc));
+      doTryElement.append(this.serialize('doCatch', doCatch as ElementType, doc));
     });
 
-    doTryElement.append(this.serialize('doFinally', doTry.doFinally, doc));
+    doTryElement.append(this.serialize('doFinally', doTry.doFinally as ElementType, doc));
     return doTryElement;
   }
 }

@@ -42,7 +42,7 @@ describe('XmlParser', () => {
     expect(result).toEqual([
       {
         route: {
-          from: { uri: 'direct:start' },
+          from: { uri: 'direct:start', steps: [] },
         },
       },
     ]);
@@ -53,7 +53,7 @@ describe('XmlParser', () => {
     const result = parser.parseXML(xml);
     expect(result).toEqual([
       {
-        route: { id: 'test', from: { uri: 'direct:first' } },
+        route: { id: 'test', from: { uri: 'direct:first', steps: [] } },
       },
       {
         route: {

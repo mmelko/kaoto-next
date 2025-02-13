@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 /*
  * Copyright (C) 2023 Red Hat, Inc.
  *
@@ -19,8 +17,9 @@
 import { CamelCatalogService, CatalogKind } from '../../../models';
 import { setNamespaces } from '../xml-utils';
 
+type Expression = { expression: string; [key: string]: unknown };
 export class ExpressionXmlSerializer {
-  static serialize(key: string, expressionObjext: unknown, doc: Document, element: Element, routeParent: Element) {
+  static serialize(key: string, expressionObjext: unknown, doc: Document, element: Element, routeParent?: Element) {
     if (!expressionObjext) return;
     let expression: Element;
     //todo comment
@@ -34,18 +33,20 @@ export class ExpressionXmlSerializer {
     element.appendChild(expression);
   }
 
-  static createExpressionElement(expression: unknown, doc: Document, routeParent: Element): Element {
-    const expressionObject = Object.entries(expression)[0];
-    const expressionElement = doc.createElement(expressionObject[0]);
-    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, expressionObject[0])?.properties;
+  static createExpressionElement(expressionEntity: unknown, doc: Document, routeParent?: Element): Element {
+    const expression = expressionEntity as { [key: string]: unknown };
 
-    expressionElement.textContent = expressionObject[1].expression;
+    const [expressionType, expressionObject] = Object.entries(expression)[0] as [string, Expression];
 
-    for (const [key, value] of Object.entries(expressionObject[1])) {
+    const expressionElement = doc.createElement(expressionType);
+    const properties = CamelCatalogService.getComponent(CatalogKind.Processor, expressionType)?.properties;
+
+    expressionElement.textContent = expressionObject.expression;
+
+    for (const [key, value] of Object.entries(expressionObject)) {
       if (key === 'expression') continue;
-      if (key === 'namespace' && value) {
-        console.log('setting namespaces', value, routeParent);
-        setNamespaces(routeParent, value);
+      if (key === 'namespace' && value && routeParent) {
+        setNamespaces(routeParent, value as { key: string; value: string }[]);
       }
 
       if (properties && properties[key] && properties[key].kind === 'attribute') {

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { extractAttributesTyped } from '../xml-utils';
 import {
   FromDefinition,
   ProcessorDefinition,
@@ -39,7 +38,7 @@ export class RouteXmlParser {
   static parse(routeElement: Element): RouteDefinition {
     const fromElement: Element = routeElement.getElementsByTagName('from')[0];
 
-    const from = extractAttributesTyped<FromDefinition>(fromElement) as FromDefinition;
+    const from = StepParser.parseElement(fromElement) as FromDefinition;
     const routeDef = StepParser.parseElement(routeElement) as { [key: string]: unknown };
 
     from.steps = routeDef.steps as ProcessorDefinition[] | [];

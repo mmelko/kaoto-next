@@ -1,13 +1,14 @@
 import { CamelCatalogService, CatalogKind } from '../../../models';
-import { StepXmlSerializer } from './step-xml-serializer';
+import { ElementType, StepXmlSerializer } from './step-xml-serializer';
+import { BeanFactory } from '@kaoto/camel-catalog/types';
 
 export class BeansXmlSerializer {
-  static serialize(beanElement: { [key: string]: unknown }, doc: Document): Element | undefined {
+  static serialize(beanElement: BeanFactory, doc: Document): Element | undefined {
     const bean = doc.createElement('bean');
     const properties = CamelCatalogService.getComponent(CatalogKind.Processor, 'beanFactory')?.properties;
     if (!properties) return undefined;
 
-    StepXmlSerializer.serializeObjectProperties(bean, doc, beanElement, properties);
+    StepXmlSerializer.serializeObjectProperties(bean, doc, beanElement as unknown as ElementType, properties);
 
     if (beanElement['constructors']) {
       bean.appendChild(this.serializeConstructors(beanElement['constructors'], doc));

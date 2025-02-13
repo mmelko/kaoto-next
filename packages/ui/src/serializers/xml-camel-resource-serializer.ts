@@ -1,6 +1,6 @@
 import { isXML, KaotoXmlParser } from './xml/kaoto-xml-parser';
 import { CamelResource } from '../models/camel/camel-resource';
-import { KaotoXmlSerializer } from './xml/serializers/kaoto-xml-serializer';
+import { EntityDefinition, KaotoXmlSerializer } from './xml/serializers/kaoto-xml-serializer';
 import { formatXml } from './xml/xml-utils';
 import { CamelResourceSerializer } from './camel-resource-serializer';
 import { CamelYamlDsl, Integration, Kamelet, KameletBinding, Pipe } from '@kaoto/camel-catalog/types';
@@ -27,8 +27,10 @@ export class XmlCamelResourceSerializer implements CamelResourceSerializer {
   }
 
   serialize(resource: CamelResource): string {
-    const entities = resource.getEntities().filter((entity) => entity.type === EntityType.Beans);
-    entities.push(...resource.getVisualEntities());
+    const entities: EntityDefinition[] = resource
+      .getEntities()
+      .filter((entity) => entity.type === EntityType.Beans) as EntityDefinition[];
+    entities.push(...(resource.getVisualEntities() as EntityDefinition[]));
 
     const xmlDocument = KaotoXmlSerializer.serialize(entities);
     let xmlString = this.xmlSerializer.serializeToString(xmlDocument);

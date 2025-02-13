@@ -1,5 +1,3 @@
-// @ts-nocheck
-import { JSONSchema4 } from 'json-schema';
 import { ICamelProcessorProperty } from '../../models';
 
 export const PROCESSOR_NAMES: Map<string, string> = new Map([
@@ -23,14 +21,14 @@ export const ARRAY_TYPE_NAMES: Map<string, string> = new Map([['allowableValues'
 
 const DEFAULT_XMLNS = ['http://camel.apache.org/schema/spring', 'http://www.w3.org/2001/XMLSchema-instance'];
 
-export function extractAttributesTyped<T>(element: Element): Partial<T> {
-  const attributes = {} as Partial<T>;
-  for (let i = 0; i < element.attributes.length; i++) {
-    const attr = element.attributes[i];
-    attributes[attr.name as keyof T] = attr.value;
-  }
-  return attributes;
-}
+// export function extractAttributesTyped<T>(element: Element): Partial<T> {
+//   const attributes = {} as Partial<T>;
+//   for (let i = 0; i < element.attributes.length; i++) {
+//     const attr = element.attributes[i];
+//     attributes[attr.name as keyof T] = attr.value;
+//   }
+//   return attributes;
+// }
 
 export function extractAttributesFromXmlElement(
   element: Element,
@@ -49,8 +47,8 @@ export function extractAttributesFromXmlElement(
   return attributes;
 }
 
-export function collectNamespaces(element: Element): [{ key: string; value: string }] {
-  let namespaces: [{ key: string; value: string }] = [];
+export function collectNamespaces(element: Element): { key: string; value: string }[] {
+  let namespaces: { key: string; value: string }[] = [];
 
   Array.from(element.attributes).forEach((attr) => {
     if (attr.name.startsWith('xmlns')) {
@@ -64,12 +62,7 @@ export function collectNamespaces(element: Element): [{ key: string; value: stri
   return namespaces;
 }
 
-function getRouteElement(element: Element): Element {
-  if (element.tagName === 'route') return element;
-  return getRouteElement(element.parentElement);
-}
-
-export function setNamespaces(element: Element, namespaces: [{ key: string; value: string }]): void {
+export function setNamespaces(element: Element, namespaces: { key: string; value: string }[]): void {
   namespaces.forEach((ns) => {
     element.setAttribute(`xmlns:${ns.key}`, ns.value);
   });
