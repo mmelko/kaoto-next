@@ -129,7 +129,7 @@ export const FlowsList: FunctionComponent<IFlowsList> = (props) => {
             <Th>
               {' '}
               <Button
-                title={`Delete filtered`}
+                title={searchString === '' ? `Delete all flows` : `Delete filtered flows`}
                 data-testid={`delete-filtered-btn`}
                 icon={<TrashIcon />}
                 variant="plain"
