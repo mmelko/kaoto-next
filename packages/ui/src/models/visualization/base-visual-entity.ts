@@ -161,6 +161,7 @@ export interface IVisualizationNodeData {
   entity?: BaseVisualCamelEntity;
   isPlaceholder?: boolean;
   isGroup?: boolean;
+  type?: 'branch' | 'step' | 'group';
   [key: string]: unknown;
 }
 

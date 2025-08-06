@@ -78,40 +78,39 @@ export class BaseNodeMapper implements INodeMapper {
     const stepsList = getValue(entityDefinition, path, []) as ProcessorDefinition[];
     //const canvasEdges: CanvasEdge[] = [];
 
-    const { nodes: branchNodes, edges: branchEdges } = stepsList.reduce(
-      (accStepsNodes, step, index) => {
-        const { nodes: accNodes, edges: accEdges } = accStepsNodes;
-        const singlePropertyName = Object.keys(step)[0];
-        const childPath = `${path}.${index}.${singlePropertyName}`;
-        const childComponentLookup = CamelComponentSchemaService.getCamelComponentLookup(
-          childPath,
-          getValue(step, singlePropertyName),
-        );
+    const branchNodes: IVisualizationNode[] = [];
+    const branchEdges: CanvasEdge[] = [];
+    let previousVizNode: IVisualizationNode | undefined = undefined;
 
-        const { nodes, edges } = this.rootNodeMapper.getVizNodeFromProcessor(
-          childPath,
-          childComponentLookup,
-          entityDefinition,
-        );
-        const vizNode = nodes[0];
-        const previousVizNode = accNodes[accNodes.length - 1];
+    stepsList.forEach((step, index) => {
+      const singlePropertyName = Object.keys(step)[0];
+      const childPath = `${path}.${index}.${singlePropertyName}`;
+      const childComponentLookup = CamelComponentSchemaService.getCamelComponentLookup(
+        childPath,
+        getValue(step, singlePropertyName),
+      );
 
-        if (previousVizNode !== undefined) {
-          previousVizNode.setNextNode(vizNode);
-          vizNode.setPreviousNode(previousVizNode);
+      const { nodes, edges } = this.rootNodeMapper.getVizNodeFromProcessor(
+        childPath,
+        childComponentLookup,
+        entityDefinition,
+      );
+      const vizNode = nodes[0];
 
-          /// Add edge between previous and current node
-          previousVizNode.getEndNodes().forEach((endNode) => {
-            edges.push(BaseNodeMapper.getEdge(endNode.id, vizNode.id));
-          });
-        }
+      if (previousVizNode !== undefined) {
+        previousVizNode.setNextNode(vizNode);
+        vizNode.setPreviousNode(previousVizNode);
 
-        accNodes.push(...nodes);
-        accEdges.push(...edges);
-        return { nodes: accNodes, edges: accEdges };
-      },
-      { nodes: [], edges: [] } as VizNodesWithEdges,
-    );
+        previousVizNode.getEndNodes().forEach((endNode) => {
+          branchEdges.push(BaseNodeMapper.getEdge(endNode.id, vizNode.id));
+        });
+      }
+
+      branchNodes.push(...nodes);
+      branchEdges.push(...edges);
+
+      previousVizNode = vizNode;
+    });
 
     /** Empty steps branch placeholder */
     if (branchNodes.length === 0) {
@@ -148,7 +147,7 @@ export class BaseNodeMapper implements INodeMapper {
   protected getChildrenFromArrayClause(path: string, entityDefinition: unknown): VizNodesWithEdges {
     const expressionList = getValue(entityDefinition, path, []) as When1[] | DoCatch[];
     const vizNodes: IVisualizationNode[] = [];
-    const edges: CanvasEdge[] = [];
+    const vizEdges: CanvasEdge[] = [];
 
     expressionList.forEach((_step, index) => {
       const childPath = `${path}.${index}`;
@@ -161,10 +160,10 @@ export class BaseNodeMapper implements INodeMapper {
         entityDefinition,
       );
       vizNodes.push(...nodes);
-      edges.push(...edges);
+      vizEdges.push(...edges);
     });
-
-    return { nodes: vizNodes, edges: edges };
+    console.log('edges', 'nodes', vizNodes, vizEdges);
+    return { nodes: vizNodes, edges: vizEdges };
   }
 
   static getEdge(source: string, target: string): CanvasEdge {
