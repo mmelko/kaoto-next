@@ -1,4 +1,4 @@
-@use '../custom';
+@use '../Custom/custom';
 
 .custom-node {
   @include custom.highligth {
@@ -55,8 +55,10 @@
         border-radius: calc(var(--custom-node-BorderRadius) * 0.4);
         text-align: center;
         align-self: center;
-        width: 100px;
-        border:2px solid red;
+        width: 100%;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
 
         &__error {
           color: var(--custom-node-BorderColor);
@@ -69,8 +71,30 @@
     }
   }
 
+  .custom-node__label {
+    background: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    text-align: center;
+
+  }
   &__toolbar {
     overflow: visible;
     text-align: center;
+  }
+
+  .custom-node__toolbar {
+    position: absolute;
+    left: 50%;
+    top: -40px; /* or use -CanvasDefaults.STEP_TOOLBAR_HEIGHT */
+    transform: translateX(-50%);
+    z-index: 9999;
+    width: 350px;
+    height: 40px; /* or use CanvasDefaults.STEP_TOOLBAR_HEIGHT */
+    pointer-events: auto;
   }
 }
