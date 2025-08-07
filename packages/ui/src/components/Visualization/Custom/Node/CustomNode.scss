@@ -53,6 +53,10 @@
         background-color: var(--custom-node-BackgroundColor);
         padding: 0 calc(var(--pf-t--global--spacer--xs) * 0.75);
         border-radius: calc(var(--custom-node-BorderRadius) * 0.4);
+        text-align: center;
+        align-self: center;
+        width: 100px;
+        border:2px solid red;
 
         &__error {
           color: var(--custom-node-BorderColor);
