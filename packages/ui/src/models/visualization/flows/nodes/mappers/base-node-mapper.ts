@@ -162,16 +162,17 @@ export class BaseNodeMapper implements INodeMapper {
       vizNodes.push(...nodes);
       vizEdges.push(...edges);
     });
-    console.log('edges', 'nodes', vizNodes, vizEdges);
+
     return { nodes: vizNodes, edges: vizEdges };
   }
 
-  static getEdge(source: string, target: string): CanvasEdge {
+  static getEdge(source: string, target: string, options?: object): CanvasEdge {
     return {
       id: `${source} >>> ${target}`,
-      type: 'edge',
+      type: 'default',
       source,
       target,
+      ...options,
     };
   }
 }
