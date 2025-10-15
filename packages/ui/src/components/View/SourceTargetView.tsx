@@ -9,7 +9,7 @@ import { useMappingLinks } from '../../hooks/useMappingLinks';
 import { TargetPanel } from './TargetPanel';
 
 export const SourceTargetView: FunctionComponent = () => {
-  const { reloadNodeReferences, setDefaultHandler } = useCanvas();
+  const { setDefaultHandler } = useCanvas();
   const { setMappingLinkCanvasRef } = useMappingLinks();
   const mappingLinkCanvasRef = useRef<HTMLDivElement>(null);
 
