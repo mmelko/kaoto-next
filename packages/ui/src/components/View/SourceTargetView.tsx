@@ -23,7 +23,7 @@ export const SourceTargetView: FunctionComponent = () => {
   }, [setDefaultHandler]);
 
   return (
-    <Split className="source-target-view" onScroll={reloadNodeReferences}>
+    <Split className="source-target-view">
       <SplitItem className="source-target-view__source-split">
         <SourcePanel />
       </SplitItem>
