@@ -323,7 +323,8 @@ describe('DocumentUtilService', () => {
 
       const orderPerson = doc.fields[0].fields.find((f) => f.name === 'OrderPerson');
       expect(orderPerson?.type).toBe(Types.Container);
-      expect(orderPerson?.namedTypeFragmentRefs).toHaveLength(1);
+      // Eager resolution clears namedTypeFragmentRefs even when fragment is not found
+      expect(orderPerson?.namedTypeFragmentRefs).toHaveLength(0);
       expect(orderPerson?.fields).toEqual([]);
     });
 
@@ -1492,21 +1493,17 @@ describe('DocumentUtilService', () => {
           schemaPath: '/tns:Root/tns:Person/tns:Address',
           type: 'tns:DetailedAddressType',
           originalType: 'tns:USAddressType',
-          variant: TypeOverrideVariant.SAFE,
+          variant: FieldOverrideVariant.SAFE,
         },
       ];
       DocumentUtilService.processTypeOverrides(doc, overrides, namespaceMap, XmlSchemaTypesService.parseTypeOverride);
 
-      // After override, field should have namedTypeFragmentRefs
-      expect(address!.fields).toHaveLength(0);
-      expect(address!.namedTypeFragmentRefs).toHaveLength(1);
+      // After override, type fragment is eagerly resolved, so children are immediately available
+      expect(address!.namedTypeFragmentRefs).toHaveLength(0); // Cleared after resolution
       expect(address!.type).toBe(Types.Container);
+      expect(address!.fields.length).toBeGreaterThan(0); // Children already populated
 
-      // Resolve the type fragment (simulates what happens during tree parsing)
-      DocumentUtilService.resolveTypeFragment(address!);
-
-      // After resolution, field should have children from the extension type
-      expect(address!.fields.length).toBeGreaterThan(0);
+      // Verify field has children from the extension type
       const childNames = address!.fields.map((f) => f.name);
       expect(childNames).toContain('Street');
       expect(childNames).toContain('City');
@@ -1552,14 +1549,14 @@ describe('DocumentUtilService', () => {
           schemaPath: '/tns:Root/tns:Person/tns:Address',
           type: 'tns:DetailedAddressType',
           originalType: 'tns:USAddressType',
-          variant: TypeOverrideVariant.SAFE,
+          variant: FieldOverrideVariant.SAFE,
         },
       ];
       DocumentUtilService.processTypeOverrides(doc, overrides, namespaceMap, XmlSchemaTypesService.parseTypeOverride);
 
-      // Verify override was applied
-      expect(address!.fields).toHaveLength(0);
-      expect(address!.namedTypeFragmentRefs).toHaveLength(1);
+      // Verify override was applied - eager resolution populates children immediately
+      expect(address!.fields).toHaveLength(5);
+      expect(address!.namedTypeFragmentRefs).toHaveLength(0);
 
       // Rebuild tree (simulates what happens after documentRevision change)
       const newNodeData = new DocumentNodeData(doc);

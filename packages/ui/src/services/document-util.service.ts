@@ -350,6 +350,8 @@ export class DocumentUtilService {
 
     if (type === Types.Container) {
       field.namedTypeFragmentRefs = [typeQName.toString()];
+      // Eagerly resolve type fragment so children are immediately available
+      DocumentUtilService.resolveTypeFragment(field);
     } else {
       field.namedTypeFragmentRefs = [];
     }
@@ -382,8 +384,12 @@ export class DocumentUtilService {
     field.fields = origFields ?? [];
     if (origRefs !== undefined) {
       field.namedTypeFragmentRefs = [...origRefs];
+      // Eagerly resolve type fragment so children are immediately available
+      DocumentUtilService.resolveTypeFragment(field);
     } else if (!origFields && origType === Types.Container && origTypeQName) {
       field.namedTypeFragmentRefs = [origTypeQName.toString()];
+      // Eagerly resolve type fragment so children are immediately available
+      DocumentUtilService.resolveTypeFragment(field);
     } else {
       field.namedTypeFragmentRefs = [];
     }

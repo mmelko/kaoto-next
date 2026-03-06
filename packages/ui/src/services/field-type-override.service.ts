@@ -6,7 +6,7 @@ import { DocumentUtilService, ParseTypeOverrideFn } from './document-util.servic
 import { JsonSchemaDocument } from './json-schema-document.model';
 import { JsonSchemaDocumentService } from './json-schema-document.service';
 import { JsonSchemaTypesService } from './json-schema-types.service';
-import { buildPrefixedName } from './qname-util';
+import { buildPrefixedName, formatQNameWithPrefix } from './qname-util';
 import { SchemaPathService } from './schema-path.service';
 import { XmlSchemaDocument } from './xml-schema-document.model';
 import { XmlSchemaDocumentService } from './xml-schema-document.service';
@@ -184,17 +184,9 @@ export class FieldTypeOverrideService {
     variant: FieldOverrideVariant.SAFE | FieldOverrideVariant.FORCE,
   ): IFieldTypeOverride {
     const schemaPath = SchemaPathService.build(field, namespaceMap);
-    const origType = field.originalField?.type ?? field.type;
     const origTypeQName = field.originalField?.typeQName ?? field.typeQName;
-    const localPart = origTypeQName?.getLocalPart();
-    const namespaceURI = origTypeQName?.getNamespaceURI();
-    const prefix = namespaceURI ? Object.entries(namespaceMap).find(([, uri]) => uri === namespaceURI)?.[0] : undefined;
-    let originalTypeString: string;
-    if (localPart) {
-      originalTypeString = prefix ? `${prefix}:${localPart}` : localPart;
-    } else {
-      originalTypeString = origType;
-    }
+    const origType = field.originalField?.type ?? field.type;
+    const originalTypeString = formatQNameWithPrefix(origTypeQName, namespaceMap, origType);
     return {
       schemaPath,
       type: candidate.typeString,
@@ -206,19 +198,9 @@ export class FieldTypeOverrideService {
   /**
    * Format a QName as `prefix:localPart` using the namespace map.
    * Falls back to the provided fallback string if the QName is null.
+   * @deprecated Use formatQNameWithPrefix from qname-util.ts instead
    */
-  static formatQNameWithPrefix(
-    qName: { getNamespaceURI: () => string; getLocalPart: () => string | null } | null | undefined,
-    namespaceMap: Record<string, string>,
-    fallback: string,
-  ): string {
-    if (!qName) return fallback;
-    const nsURI = qName.getNamespaceURI();
-    const localPart = qName.getLocalPart();
-    if (!localPart) return fallback;
-    const prefix = Object.entries(namespaceMap).find(([, uri]) => uri === nsURI)?.[0] || '';
-    return prefix ? `${prefix}:${localPart}` : localPart;
-  }
+  static readonly formatQNameWithPrefix = formatQNameWithPrefix;
 
   /**
    * Apply a field type override to a field in a document.
@@ -356,10 +338,7 @@ export class FieldTypeOverrideService {
    * );
    * ```
    */
-  static addSchemaFilesForTypeOverride(
-    document: IDocument,
-    additionalFiles: Record<string, string>,
-  ): void {
+  static addSchemaFilesForTypeOverride(document: IDocument, additionalFiles: Record<string, string>): void {
     if (document instanceof PrimitiveDocument) {
       throw new TypeError('Cannot add schema files to primitive document');
     }
