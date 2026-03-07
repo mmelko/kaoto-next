@@ -62,7 +62,10 @@ export class XmlSchemaDocumentService {
    * @param definition The DocumentDefinition containing schema information and configuration
    * @returns {@link CreateXmlSchemaDocumentResult} with document, root element options, and validation status
    */
-  static createXmlSchemaDocument(definition: DocumentDefinition): CreateXmlSchemaDocumentResult {
+  static createXmlSchemaDocument(
+    definition: DocumentDefinition,
+    namespaceMap: Record<string, string> = {},
+  ): CreateXmlSchemaDocumentResult {
     const collection = new XmlSchemaCollection();
     const definitionFiles = definition.definitionFiles || {};
     collection.getSchemaResolver().addFiles(definitionFiles);
@@ -91,8 +94,6 @@ export class XmlSchemaDocumentService {
       return rootElement;
     }
 
-    XmlSchemaDocumentService.ensureNamespaceMap(definition, collection);
-
     const document = new XmlSchemaDocument(definition, collection, rootElement);
 
     XmlSchemaDocumentService.populateNamedTypeFragments(document);
@@ -103,7 +104,7 @@ export class XmlSchemaDocumentService {
       definition.fieldTypeOverrides ?? [],
       definition.choiceSelections ?? [],
       definition.fieldSubstitutions ?? [],
-      definition.namespaceMap || {},
+      namespaceMap,
       XmlSchemaTypesService.parseTypeOverride,
       XmlSchemaTypesService.resolveSubstitution,
     );
@@ -207,37 +208,16 @@ export class XmlSchemaDocumentService {
   }
 
   /**
-   * Helper method to ensure namespace map is populated.
-   */
-  private static ensureNamespaceMap(definition: DocumentDefinition, collection: XmlSchemaCollection): void {
-    if (!definition.namespaceMap) {
-      const extractedNamespaces = XmlSchemaDocumentService.extractNamespacesFromCollection(collection, {});
-      if (Object.keys(extractedNamespaces).length > 0) {
-        definition.namespaceMap = extractedNamespaces;
-      }
-    }
-  }
-
-  /**
    * Adds additional schema files to an existing document's schema collection.
    * This is useful when field type overrides reference types defined in additional schema files.
    * @param document - The document whose schema collection will be updated
    * @param additionalFiles - Map of file paths to file contents to add
-   * @returns Updated namespace map with new namespaces from added schemas
    */
-  static addSchemaFiles(document: XmlSchemaDocument, additionalFiles: Record<string, string>): Record<string, string> {
+  static addSchemaFiles(document: XmlSchemaDocument, additionalFiles: Record<string, string>): void {
     const collection = document.xmlSchemaCollection;
-    const resolver = collection.getSchemaResolver();
-
-    resolver.addFiles(additionalFiles);
-
+    collection.getSchemaResolver().addFiles(additionalFiles);
     XmlSchemaDocumentUtilService.loadXmlSchemaFiles(collection, additionalFiles);
     XmlSchemaDocumentService.populateNamedTypeFragments(document);
-
-    const existingNamespaceMap = document.definition.namespaceMap || {};
-    const newNamespaces = XmlSchemaDocumentService.extractNamespacesFromSchemas(additionalFiles, existingNamespaceMap);
-
-    return XmlSchemaDocumentService.mergeNamespaceMaps(existingNamespaceMap, newNamespaces);
   }
 
   /**
@@ -250,7 +230,11 @@ export class XmlSchemaDocumentService {
    * @param filePath - The key of the schema file to remove from {@link DocumentDefinition.definitionFiles}
    * @returns A {@link CreateXmlSchemaDocumentResult} with updated validation status, errors/warnings, and definition
    */
-  static removeSchemaFile(definition: DocumentDefinition, filePath: string): CreateXmlSchemaDocumentResult {
+  static removeSchemaFile(
+    definition: DocumentDefinition,
+    filePath: string,
+    namespaceMap: Record<string, string> = {},
+  ): CreateXmlSchemaDocumentResult {
     const updatedFiles = { ...definition.definitionFiles };
     delete updatedFiles[filePath];
 
@@ -268,7 +252,7 @@ export class XmlSchemaDocumentService {
 
     // Try to create the Document object. It could fail if the root element user chose was defined in the removed
     // schema file. In that case, we unset `updatedDefinition.rootElementChoice` and retry.
-    const result = XmlSchemaDocumentService.createXmlSchemaDocument(updatedDefinition);
+    const result = XmlSchemaDocumentService.createXmlSchemaDocument(updatedDefinition, namespaceMap);
 
     // If it succeeds or a root element was not set, return as it is
     if (result.document || !definition.rootElementChoice) {
@@ -280,18 +264,9 @@ export class XmlSchemaDocumentService {
     updatedDefinition.fieldTypeOverrides = [];
     updatedDefinition.choiceSelections = [];
     updatedDefinition.fieldSubstitutions = [];
-    return XmlSchemaDocumentService.createXmlSchemaDocument(updatedDefinition);
+    return XmlSchemaDocumentService.createXmlSchemaDocument(updatedDefinition, namespaceMap);
   }
 
-  /**
-   * Extracts namespace mappings from XML schema files.
-   * Parses each schema file to extract targetNamespace and generates appropriate prefixes.
-   * Filters out standard XML/XSD namespaces.
-   *
-   * @param schemaFiles - Map of file paths to schema file contents
-   * @param existingNamespaceMap - Existing namespace map to check for conflicts
-   * @returns Map of generated prefix -> namespace URI
-   */
   /**
    * Extracts namespace mappings from an already-parsed XmlSchemaCollection.
    * Unlike extractNamespacesFromSchemas, this reuses an existing collection

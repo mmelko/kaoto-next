@@ -41,7 +41,10 @@ export class JsonSchemaDocumentService {
    * @param definition The DocumentDefinition containing schema information
    * @returns CreateJsonSchemaDocumentResult with document and validation status
    */
-  static createJsonSchemaDocument(definition: DocumentDefinition): CreateJsonSchemaDocumentResult {
+  static createJsonSchemaDocument(
+    definition: DocumentDefinition,
+    namespaceMap: Record<string, string> = {},
+  ): CreateJsonSchemaDocumentResult {
     const filePaths = Object.keys(definition.definitionFiles || {});
     if (filePaths.length === 0) {
       return {
@@ -107,7 +110,7 @@ export class JsonSchemaDocumentService {
       definition.fieldTypeOverrides ?? [],
       definition.choiceSelections ?? [],
       [],
-      definition.namespaceMap || {},
+      namespaceMap,
       JsonSchemaTypesService.parseTypeOverride,
       () => undefined,
     );
@@ -129,9 +132,8 @@ export class JsonSchemaDocumentService {
    * This is useful when field type overrides reference types defined in additional schema files.
    * @param document - The document whose schema collection will be updated
    * @param additionalFiles - Map of file paths to file contents to add
-   * @returns Empty namespace map (JSON Schema doesn't use namespaces, but this maintains API consistency)
    */
-  static addSchemaFiles(document: JsonSchemaDocument, additionalFiles: Record<string, string>): Record<string, string> {
+  static addSchemaFiles(document: JsonSchemaDocument, additionalFiles: Record<string, string>): void {
     const collection = document.schemaCollection;
 
     collection.addDefinitionFiles(additionalFiles);
@@ -145,8 +147,6 @@ export class JsonSchemaDocumentService {
         throw new Error(`Failed to add schema file "${filePath}": ${errorMessage}`);
       }
     }
-
-    return {};
   }
 
   /**
@@ -159,7 +159,11 @@ export class JsonSchemaDocumentService {
    * @param filePath - The key of the schema file to remove from {@link DocumentDefinition.definitionFiles}
    * @returns A {@link CreateJsonSchemaDocumentResult} with updated validation status, errors/warnings, and definition
    */
-  static removeSchemaFile(definition: DocumentDefinition, filePath: string): CreateJsonSchemaDocumentResult {
+  static removeSchemaFile(
+    definition: DocumentDefinition,
+    filePath: string,
+    namespaceMap: Record<string, string> = {},
+  ): CreateJsonSchemaDocumentResult {
     const updatedFiles = { ...definition.definitionFiles };
     delete updatedFiles[filePath];
 
@@ -177,7 +181,7 @@ export class JsonSchemaDocumentService {
 
     // Try to create the Document object. It could fail if the primary schema is the removed schema file.
     // In that case, we unset updatedDefinition.rootElementChoice and retry.
-    const result = JsonSchemaDocumentService.createJsonSchemaDocument(updatedDefinition);
+    const result = JsonSchemaDocumentService.createJsonSchemaDocument(updatedDefinition, namespaceMap);
 
     // If it succeeds or a primary schema not set, return as it is
     if (result.document || !definition.rootElementChoice) {
@@ -189,7 +193,7 @@ export class JsonSchemaDocumentService {
     updatedDefinition.fieldTypeOverrides = [];
     updatedDefinition.choiceSelections = [];
     updatedDefinition.fieldSubstitutions = [];
-    return JsonSchemaDocumentService.createJsonSchemaDocument(updatedDefinition);
+    return JsonSchemaDocumentService.createJsonSchemaDocument(updatedDefinition, namespaceMap);
   }
 
   private static populateDependencyMetadata(
