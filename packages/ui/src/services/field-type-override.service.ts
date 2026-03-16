@@ -360,7 +360,7 @@ export class FieldTypeOverrideService {
       document.definition.name,
       { ...document.definition.definitionFiles, ...additionalFiles },
       document.definition.rootElementChoice,
-      updatedNamespaceMap,
+      document.definition.namespaceMap,
       document.definition.fieldTypeOverrides,
       document.definition.choiceSelections,
       document.definition.fieldSubstitutions,

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { BODY_DOCUMENT_ID, DocumentDefinitionType, DocumentType, IField } from '../../../../models/datamapper/document';
 import { MappingTree } from '../../../../models/datamapper/mapping';
-import { IFieldTypeInfo, TypeOverrideVariant, Types } from '../../../../models/datamapper/types';
+import { IFieldTypeInfo, FieldOverrideVariant, Types } from '../../../../models/datamapper/types';
 import { IMetadataApi, MetadataContext } from '../../../../providers';
 import { DataMapperMetadataService } from '../../../../services/datamapper-metadata.service';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
@@ -33,8 +33,8 @@ describe('TypeOverrideModal', () => {
 
     testField = testTargetDoc.fields[0];
     // Reset field state
-    testField.typeOverride = TypeOverrideVariant.NONE;
-    testField.originalType = Types.String;
+    testField.typeOverride = FieldOverrideVariant.NONE;
+    testField.originalField = { name: testField.name, namespaceURI: testField.namespaceURI, namespacePrefix: testField.namespacePrefix, type: Types.String, typeQName: testField.typeQName, namedTypeFragmentRefs: [] };
   });
 
   afterEach(() => {
@@ -210,7 +210,7 @@ describe('TypeOverrideModal', () => {
   });
 
   it('should not show Remove Override button when field has no override', () => {
-    testField.typeOverride = TypeOverrideVariant.NONE;
+    testField.typeOverride = FieldOverrideVariant.NONE;
 
     render(
       <TypeOverrideModal
@@ -304,8 +304,8 @@ describe('TypeOverrideModal', () => {
   });
 
   it('should call onRemove when Remove Override button is clicked', () => {
-    testField.typeOverride = TypeOverrideVariant.SAFE;
-    testField.originalType = Types.String;
+    testField.typeOverride = FieldOverrideVariant.SAFE;
+    testField.originalField = { name: testField.name, namespaceURI: testField.namespaceURI, namespacePrefix: testField.namespacePrefix, type: Types.String, typeQName: testField.typeQName, namedTypeFragmentRefs: [] };
 
     const onRemoveMock = jest.fn();
 
@@ -443,7 +443,7 @@ describe('TypeOverrideModal', () => {
 
     jest.spyOn(FieldTypeOverrideService, 'getSafeOverrideCandidates').mockReturnValue(mockCandidates);
 
-    testField.typeOverride = TypeOverrideVariant.SAFE;
+    testField.typeOverride = FieldOverrideVariant.SAFE;
     testField.typeQName = new QName(NS_XML_SCHEMA, 'int');
 
     render(

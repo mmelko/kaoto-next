@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { BODY_DOCUMENT_ID, DocumentDefinitionType, DocumentType } from '../../../../models/datamapper/document';
 import { MappingTree } from '../../../../models/datamapper/mapping';
-import { TypeOverrideVariant } from '../../../../models/datamapper/types';
+import { FieldOverrideVariant } from '../../../../models/datamapper/types';
 import { TestUtil } from '../../../../stubs/datamapper/data-mapper';
 import { FieldOverrideContextMenu } from './FieldOverrideContextMenu';
 
@@ -170,7 +170,7 @@ describe('FieldOverrideContextMenu', () => {
 
   it('should show Reset Override option when field has an override', () => {
     const field = testTargetDoc.fields[0];
-    field.typeOverride = TypeOverrideVariant.SAFE;
+    field.typeOverride = FieldOverrideVariant.SAFE;
 
     render(
       <FieldOverrideContextMenu field={field} onUpdate={mockOnUpdate}>
@@ -185,7 +185,7 @@ describe('FieldOverrideContextMenu', () => {
     expect(screen.getByText('Reset Override')).toBeInTheDocument();
 
     // Clean up
-    field.typeOverride = TypeOverrideVariant.NONE;
+    field.typeOverride = FieldOverrideVariant.NONE;
   });
 
   it('should call revertTypeOverride and onUpdate when Reset Override is clicked', () => {
@@ -198,7 +198,7 @@ describe('FieldOverrideContextMenu', () => {
     });
 
     const field = testTargetDoc.fields[0];
-    field.typeOverride = TypeOverrideVariant.SAFE;
+    field.typeOverride = FieldOverrideVariant.SAFE;
 
     render(
       <FieldOverrideContextMenu field={field} onUpdate={mockOnUpdate}>
@@ -218,6 +218,6 @@ describe('FieldOverrideContextMenu', () => {
     expect(mockOnUpdate).toHaveBeenCalled();
 
     // Clean up
-    field.typeOverride = TypeOverrideVariant.NONE;
+    field.typeOverride = FieldOverrideVariant.NONE;
   });
 });

@@ -2,7 +2,7 @@ import { FunctionComponent, MouseEvent, ReactNode, useCallback, useEffect, useRe
 
 import { useDataMapper } from '../../../../hooks/useDataMapper';
 import { IField } from '../../../../models/datamapper/document';
-import { TypeOverrideVariant } from '../../../../models/datamapper/types';
+import { FieldOverrideVariant } from '../../../../models/datamapper/types';
 import { FieldContextMenu } from '../FieldContextMenu';
 import { FieldTypeOverride, revertTypeOverride } from './FieldTypeOverride';
 
@@ -32,7 +32,7 @@ export const FieldOverrideContextMenu: FunctionComponent<FieldOverrideContextMen
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  const hasTypeOverride = !!field && field.typeOverride !== TypeOverrideVariant.NONE;
+  const hasTypeOverride = !!field && field.typeOverride !== FieldOverrideVariant.NONE;
 
   useEffect(() => {
     if (!showContextMenu) return;

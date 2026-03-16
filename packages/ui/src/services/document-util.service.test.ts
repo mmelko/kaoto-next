@@ -323,8 +323,8 @@ describe('DocumentUtilService', () => {
 
       const orderPerson = doc.fields[0].fields.find((f) => f.name === 'OrderPerson');
       expect(orderPerson?.type).toBe(Types.Container);
-      // Eager resolution clears namedTypeFragmentRefs even when fragment is not found
-      expect(orderPerson?.namedTypeFragmentRefs).toHaveLength(0);
+      // Unresolved refs are preserved when fragment is not found in namedTypeFragments
+      expect(orderPerson?.namedTypeFragmentRefs).toHaveLength(1);
       expect(orderPerson?.fields).toEqual([]);
     });
 

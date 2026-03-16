@@ -2,7 +2,7 @@ import { render } from '@testing-library/react';
 
 import { BODY_DOCUMENT_ID, DocumentDefinitionType, DocumentType } from '../../../../models/datamapper/document';
 import { MappingTree } from '../../../../models/datamapper/mapping';
-import { IFieldTypeInfo, TypeOverrideVariant, Types } from '../../../../models/datamapper/types';
+import { IFieldTypeInfo, FieldOverrideVariant, Types } from '../../../../models/datamapper/types';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
 import { TestUtil } from '../../../../stubs/datamapper/data-mapper';
 import { FieldTypeOverride, revertTypeOverride } from './FieldTypeOverride';
@@ -94,7 +94,7 @@ describe('FieldTypeOverride', () => {
       field,
       mockSelectedType,
       testMappingTree.namespaceMap,
-      TypeOverrideVariant.SAFE,
+      FieldOverrideVariant.SAFE,
     );
     expect(mockUpdateDocument).toHaveBeenCalled();
     expect(mockOnComplete).toHaveBeenCalled();

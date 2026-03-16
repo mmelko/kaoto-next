@@ -4,7 +4,7 @@ import { FunctionComponent, ReactNode, useCallback } from 'react';
 
 import { useDataMapper } from '../../../../hooks/useDataMapper';
 import { DocumentDefinition, IDocument, IField } from '../../../../models/datamapper/document';
-import { IFieldTypeInfo, TypeOverrideVariant } from '../../../../models/datamapper/types';
+import { IFieldTypeInfo, FieldOverrideVariant } from '../../../../models/datamapper/types';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
 import { formatQNameWithPrefix } from '../../../../services/qname-util';
 import { TypeOverrideModal } from './TypeOverrideModal';
@@ -53,7 +53,7 @@ export const FieldTypeOverride: FunctionComponent<FieldTypeOverrideProps> = ({
           field,
           selectedType,
           namespaceMap,
-          TypeOverrideVariant.SAFE,
+          FieldOverrideVariant.SAFE,
         );
       }
       updateDocument(document, document.definition, previousRefId);
@@ -101,8 +101,8 @@ export function renderTypeOverrideIndicator(
   field: IField | undefined,
   namespaceMap: Record<string, string> = {},
 ): ReactNode {
-  if (!field || field.typeOverride === TypeOverrideVariant.NONE) return null;
-  const originalDisplay = formatQNameWithPrefix(field.originalTypeQName, namespaceMap, field.originalType);
+  if (!field || field.typeOverride === FieldOverrideVariant.NONE) return null;
+  const originalDisplay = formatQNameWithPrefix(field.originalField?.typeQName ?? field.typeQName, namespaceMap, field.originalField?.type ?? field.type);
   const currentDisplay = formatQNameWithPrefix(field.typeQName, namespaceMap, field.type);
   return (
     <Icon

@@ -11,7 +11,7 @@ import {
 } from '../../models/datamapper/document';
 import { DocumentTree } from '../../models/datamapper/document-tree';
 import { DocumentTreeNode } from '../../models/datamapper/document-tree-node';
-import { TypeOverrideVariant, Types } from '../../models/datamapper/types';
+import { FieldOverrideVariant, Types } from '../../models/datamapper/types';
 import { ChoiceFieldNodeData, DocumentNodeData, FieldNodeData } from '../../models/datamapper/visualization';
 import { DataMapperProvider } from '../../providers/datamapper.provider';
 import { DataMapperCanvasProvider } from '../../providers/datamapper-canvas.provider';
@@ -1009,8 +1009,8 @@ describe('SourceDocumentNode', () => {
       // Apply type override to the field
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
-      field.typeOverride = TypeOverrideVariant.SAFE;
-      field.originalType = Types.String;
+      field.typeOverride = FieldOverrideVariant.SAFE;
+      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
 
       render(<SourceDocumentNode treeNode={fieldNode} documentId={documentNodeData.id} isReadOnly={false} rank={1} />, {
         wrapper,
@@ -1036,8 +1036,8 @@ describe('SourceDocumentNode', () => {
       // Apply type override to the field
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
-      field.typeOverride = TypeOverrideVariant.SAFE;
-      field.originalType = Types.String;
+      field.typeOverride = FieldOverrideVariant.SAFE;
+      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
 
       const revertSpy = jest.spyOn(FieldTypeOverrideService, 'revertFieldTypeOverride');
 
@@ -1137,7 +1137,7 @@ describe('SourceDocumentNode', () => {
         field,
         mockCandidates['xs:int'],
         expect.any(Object),
-        TypeOverrideVariant.SAFE,
+        FieldOverrideVariant.SAFE,
       );
 
       applySpy.mockRestore();
@@ -1154,8 +1154,8 @@ describe('SourceDocumentNode', () => {
       // Apply type override to the field
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
-      field.typeOverride = TypeOverrideVariant.SAFE;
-      field.originalType = Types.String;
+      field.typeOverride = FieldOverrideVariant.SAFE;
+      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
       field.type = Types.Integer;
 
       const { container } = render(
@@ -1195,8 +1195,8 @@ describe('SourceDocumentNode', () => {
       // Apply type override to the field
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
-      field.typeOverride = TypeOverrideVariant.SAFE;
-      field.originalType = Types.String;
+      field.typeOverride = FieldOverrideVariant.SAFE;
+      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
       field.type = Types.Integer;
 
       const revertSpy = jest.spyOn(FieldTypeOverrideService, 'revertFieldTypeOverride');
