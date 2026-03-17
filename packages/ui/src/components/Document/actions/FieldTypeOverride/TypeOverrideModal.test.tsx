@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { BODY_DOCUMENT_ID, DocumentDefinitionType, DocumentType, IField } from '../../../../models/datamapper/document';
 import { MappingTree } from '../../../../models/datamapper/mapping';
-import { IFieldTypeInfo, FieldOverrideVariant, Types } from '../../../../models/datamapper/types';
+import { FieldOverrideVariant, IFieldTypeInfo, Types } from '../../../../models/datamapper/types';
 import { IMetadataApi, MetadataContext } from '../../../../providers';
 import { DataMapperMetadataService } from '../../../../services/datamapper-metadata.service';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
@@ -34,7 +34,14 @@ describe('TypeOverrideModal', () => {
     testField = testTargetDoc.fields[0];
     // Reset field state
     testField.typeOverride = FieldOverrideVariant.NONE;
-    testField.originalField = { name: testField.name, namespaceURI: testField.namespaceURI, namespacePrefix: testField.namespacePrefix, type: Types.String, typeQName: testField.typeQName, namedTypeFragmentRefs: [] };
+    testField.originalField = {
+      name: testField.name,
+      namespaceURI: testField.namespaceURI,
+      namespacePrefix: testField.namespacePrefix,
+      type: Types.String,
+      typeQName: testField.typeQName,
+      namedTypeFragmentRefs: [],
+    };
   });
 
   afterEach(() => {
@@ -53,7 +60,7 @@ describe('TypeOverrideModal', () => {
       />,
     );
 
-    expect(screen.getByText(/Type Override:/)).toBeInTheDocument();
+    expect(screen.getByText(/Field Override:/)).toBeInTheDocument();
   });
 
   it('should not render modal when isOpen is false', () => {
@@ -68,7 +75,7 @@ describe('TypeOverrideModal', () => {
       />,
     );
 
-    expect(screen.queryByText(/Type Override:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Field Override:/)).not.toBeInTheDocument();
   });
 
   it('should display field name in modal title', () => {
@@ -84,7 +91,7 @@ describe('TypeOverrideModal', () => {
     );
 
     const fieldName = testField.displayName || testField.name;
-    expect(screen.getByText(new RegExp(`Type Override:.*${fieldName}`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Field Override:.*${fieldName}`))).toBeInTheDocument();
   });
 
   it('should open type selector when toggle is clicked', () => {
@@ -300,12 +307,19 @@ describe('TypeOverrideModal', () => {
     });
 
     expect(onSaveMock).toHaveBeenCalledTimes(1);
-    expect(onSaveMock).toHaveBeenCalledWith(mockCandidates['xs:string']);
+    expect(onSaveMock).toHaveBeenCalledWith(mockCandidates['xs:string'], 'type', 'xs:string');
   });
 
   it('should call onRemove when Remove Override button is clicked', () => {
     testField.typeOverride = FieldOverrideVariant.SAFE;
-    testField.originalField = { name: testField.name, namespaceURI: testField.namespaceURI, namespacePrefix: testField.namespacePrefix, type: Types.String, typeQName: testField.typeQName, namedTypeFragmentRefs: [] };
+    testField.originalField = {
+      name: testField.name,
+      namespaceURI: testField.namespaceURI,
+      namespacePrefix: testField.namespacePrefix,
+      type: Types.String,
+      typeQName: testField.typeQName,
+      namedTypeFragmentRefs: [],
+    };
 
     const onRemoveMock = jest.fn();
 

@@ -56,23 +56,28 @@ export const NodeTitle: FunctionComponent<INodeTitle> = ({
     const optionalField = nodeData.field.minOccurs === 0;
     const repeatingField0 = nodeData.field.minOccurs >= 0 && nodeData.field.maxOccurs === 'unbounded';
     const repeatingField1 = nodeData.field.minOccurs >= 1 && nodeData.field.maxOccurs === 'unbounded';
-    const hasTypeOverride = nodeData.field.typeOverride !== FieldOverrideVariant.NONE;
+    const overrideVariant = nodeData.field.typeOverride;
+    const hasOverride = overrideVariant !== FieldOverrideVariant.NONE;
+    const isSubstitution = overrideVariant === FieldOverrideVariant.SUBSTITUTION;
 
-    // Format type names with namespace prefixes for display
-    const originalTypeDisplay = hasTypeOverride
-      ? formatQNameWithPrefix(
+    const overrideOriginalLabel = isSubstitution ? 'Original element' : 'Original type';
+    const overrideCurrentLabel = isSubstitution ? 'Substituted element' : 'Overridden type';
+    const overrideOriginal = isSubstitution
+      ? (nodeData.field.originalField?.name ?? '?')
+      : formatQNameWithPrefix(
           nodeData.field.originalField?.typeQName ?? nodeData.field.typeQName,
           namespaceMap,
-          nodeData.field.originalField?.typeQName?.toString() || nodeData.field.originalField?.type || nodeData.field.type,
-        )
-      : '';
-    const overriddenTypeDisplay = hasTypeOverride
-      ? formatQNameWithPrefix(
+          nodeData.field.originalField?.typeQName?.toString() ||
+            nodeData.field.originalField?.type ||
+            nodeData.field.type,
+        );
+    const overrideCurrent = isSubstitution
+      ? nodeData.field.name
+      : formatQNameWithPrefix(
           nodeData.field.typeQName,
           namespaceMap,
           nodeData.field.typeQName?.toString() || nodeData.field.type,
-        )
-      : '';
+        );
 
     return (
       <Popover
@@ -89,15 +94,15 @@ export const NodeTitle: FunctionComponent<INodeTitle> = ({
               <span className="popover__cell">maxOccurs :&nbsp;</span>
               <span className="popover__cell">{nodeData.field.maxOccurs}</span>
             </div>
-            {hasTypeOverride && (
+            {hasOverride && (
               <>
                 <div className="popover__row">
-                  <span className="popover__cell">Original type :&nbsp;</span>
-                  <span className="popover__cell">{originalTypeDisplay}</span>
+                  <span className="popover__cell">{overrideOriginalLabel} :&nbsp;</span>
+                  <span className="popover__cell">{overrideOriginal}</span>
                 </div>
                 <div className="popover__row">
-                  <span className="popover__cell">Overridden type :&nbsp;</span>
-                  <span className="popover__cell">{overriddenTypeDisplay}</span>
+                  <span className="popover__cell">{overrideCurrentLabel} :&nbsp;</span>
+                  <span className="popover__cell">{overrideCurrent}</span>
                 </div>
               </>
             )}

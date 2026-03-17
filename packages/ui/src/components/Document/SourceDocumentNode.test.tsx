@@ -881,7 +881,7 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.getByText('Override Type...')).toBeInTheDocument();
+      expect(screen.getByText('Override Field...')).toBeInTheDocument();
     });
 
     it('should not open context menu in read-only mode', () => {
@@ -901,7 +901,7 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
     });
 
     it('should not open context menu for document nodes', () => {
@@ -919,7 +919,7 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
     });
 
     it('should close context menu when clicking outside', () => {
@@ -939,13 +939,13 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.getByText('Override Type...')).toBeInTheDocument();
+      expect(screen.getByText('Override Field...')).toBeInTheDocument();
 
       act(() => {
         fireEvent.mouseDown(globalThis.document.body);
       });
 
-      expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
     });
 
     it('should close context menu when pressing Escape', () => {
@@ -965,13 +965,13 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.getByText('Override Type...')).toBeInTheDocument();
+      expect(screen.getByText('Override Field...')).toBeInTheDocument();
 
       act(() => {
         fireEvent.keyDown(globalThis.document, { key: 'Escape' });
       });
 
-      expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
     });
 
     it('should open Type Override Modal when clicking Override Type menu item', () => {
@@ -991,12 +991,12 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      const overrideTypeButton = screen.getByText('Override Type...');
+      const overrideTypeButton = screen.getByText('Override Field...');
       act(() => {
         fireEvent.click(overrideTypeButton);
       });
 
-      expect(screen.getByText(/Type Override:/)).toBeInTheDocument();
+      expect(screen.getByText(/Field Override:/)).toBeInTheDocument();
     });
 
     it('should show Reset Override menu item when field has type override', () => {
@@ -1010,7 +1010,14 @@ describe('SourceDocumentNode', () => {
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
       field.typeOverride = FieldOverrideVariant.SAFE;
-      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
+      field.originalField = {
+        name: field.name,
+        namespaceURI: field.namespaceURI,
+        namespacePrefix: field.namespacePrefix,
+        type: Types.String,
+        typeQName: field.typeQName,
+        namedTypeFragmentRefs: [],
+      };
 
       render(<SourceDocumentNode treeNode={fieldNode} documentId={documentNodeData.id} isReadOnly={false} rank={1} />, {
         wrapper,
@@ -1022,7 +1029,7 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      expect(screen.getByText('Override Type...')).toBeInTheDocument();
+      expect(screen.getByText('Override Field...')).toBeInTheDocument();
       expect(screen.getByText('Reset Override')).toBeInTheDocument();
     });
 
@@ -1037,7 +1044,14 @@ describe('SourceDocumentNode', () => {
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
       field.typeOverride = FieldOverrideVariant.SAFE;
-      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
+      field.originalField = {
+        name: field.name,
+        namespaceURI: field.namespaceURI,
+        namespacePrefix: field.namespacePrefix,
+        type: Types.String,
+        typeQName: field.typeQName,
+        namedTypeFragmentRefs: [],
+      };
 
       const revertSpy = jest.spyOn(FieldTypeOverrideService, 'revertFieldTypeOverride');
 
@@ -1093,14 +1107,14 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      const overrideTypeButton = screen.getByText('Override Type...');
+      const overrideTypeButton = screen.getByText('Override Field...');
       act(() => {
         fireEvent.click(overrideTypeButton);
       });
 
       // Wait for modal to open
       await waitFor(() => {
-        expect(screen.getByText(/Type Override:/)).toBeInTheDocument();
+        expect(screen.getByText(/Field Override:/)).toBeInTheDocument();
       });
 
       // Open type selector
@@ -1155,7 +1169,14 @@ describe('SourceDocumentNode', () => {
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
       field.typeOverride = FieldOverrideVariant.SAFE;
-      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
+      field.originalField = {
+        name: field.name,
+        namespaceURI: field.namespaceURI,
+        namespacePrefix: field.namespacePrefix,
+        type: Types.String,
+        typeQName: field.typeQName,
+        namedTypeFragmentRefs: [],
+      };
       field.type = Types.Integer;
 
       const { container } = render(
@@ -1196,7 +1217,14 @@ describe('SourceDocumentNode', () => {
       const fieldNodeData = fieldNode.nodeData as FieldNodeData;
       const field = fieldNodeData.field;
       field.typeOverride = FieldOverrideVariant.SAFE;
-      field.originalField = { name: field.name, namespaceURI: field.namespaceURI, namespacePrefix: field.namespacePrefix, type: Types.String, typeQName: field.typeQName, namedTypeFragmentRefs: [] };
+      field.originalField = {
+        name: field.name,
+        namespaceURI: field.namespaceURI,
+        namespacePrefix: field.namespacePrefix,
+        type: Types.String,
+        typeQName: field.typeQName,
+        namedTypeFragmentRefs: [],
+      };
       field.type = Types.Integer;
 
       const revertSpy = jest.spyOn(FieldTypeOverrideService, 'revertFieldTypeOverride');
@@ -1211,14 +1239,14 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      const overrideTypeButton = screen.getByText('Override Type...');
+      const overrideTypeButton = screen.getByText('Override Field...');
       act(() => {
         fireEvent.click(overrideTypeButton);
       });
 
       // Wait for modal to open
       await waitFor(() => {
-        expect(screen.getByText(/Type Override:/)).toBeInTheDocument();
+        expect(screen.getByText(/Field Override:/)).toBeInTheDocument();
       });
 
       // Click Remove Override button in modal
@@ -1231,7 +1259,7 @@ describe('SourceDocumentNode', () => {
 
       // Modal should be closed
       await waitFor(() => {
-        expect(screen.queryByText(/Type Override:/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Field Override:/)).not.toBeInTheDocument();
       });
 
       revertSpy.mockRestore();
@@ -1254,14 +1282,14 @@ describe('SourceDocumentNode', () => {
         fireEvent.contextMenu(nodeContainer);
       });
 
-      const overrideTypeButton = screen.getByText('Override Type...');
+      const overrideTypeButton = screen.getByText('Override Field...');
       act(() => {
         fireEvent.click(overrideTypeButton);
       });
 
       // Wait for modal to open
       await waitFor(() => {
-        expect(screen.getByText(/Type Override:/)).toBeInTheDocument();
+        expect(screen.getByText(/Field Override:/)).toBeInTheDocument();
       });
 
       // Click Cancel button
@@ -1272,7 +1300,7 @@ describe('SourceDocumentNode', () => {
 
       // Modal should be closed
       await waitFor(() => {
-        expect(screen.queryByText(/Type Override:/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Field Override:/)).not.toBeInTheDocument();
       });
     });
   });

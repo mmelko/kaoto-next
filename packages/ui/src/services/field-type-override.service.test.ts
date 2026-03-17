@@ -975,6 +975,19 @@ describe('FieldTypeOverrideService', () => {
       expect(doc.definition.fieldSubstitutions).toHaveLength(1);
       expect(doc.definition.fieldSubstitutions![0].name).toBe('sub:Dog');
     });
+
+    it('should register missing namespace and prefix the key when namespace is not in map', () => {
+      const doc = createSubstitutionDoc();
+      const namespaceMap: Record<string, string> = {};
+      const abstractAnimalField = doc.fields[0];
+
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(NS_SUBSTITUTION, 'Cat'), namespaceMap);
+
+      expect(namespaceMap['ns0']).toBe(NS_SUBSTITUTION);
+      expect(doc.definition.fieldSubstitutions![0].name).toBe('ns0:Cat');
+      expect(abstractAnimalField.typeOverride).toBe(FieldOverrideVariant.SUBSTITUTION);
+      expect(abstractAnimalField.name).toBe('Cat');
+    });
   });
 
   describe('applyFieldSubstitution() and revertFieldSubstitution() - blank namespace', () => {

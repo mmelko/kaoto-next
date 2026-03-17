@@ -2,10 +2,10 @@ import { render } from '@testing-library/react';
 
 import { BODY_DOCUMENT_ID, DocumentDefinitionType, DocumentType } from '../../../../models/datamapper/document';
 import { MappingTree } from '../../../../models/datamapper/mapping';
-import { IFieldTypeInfo, FieldOverrideVariant, Types } from '../../../../models/datamapper/types';
+import { FieldOverrideVariant, IFieldTypeInfo, Types } from '../../../../models/datamapper/types';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
 import { TestUtil } from '../../../../stubs/datamapper/data-mapper';
-import { FieldTypeOverride, revertTypeOverride } from './FieldTypeOverride';
+import { FieldTypeOverride, revertOverride } from './FieldTypeOverride';
 
 // Mock TypeOverrideModal to expose the onSave/onAttach/onRemove callbacks
 jest.mock('./TypeOverrideModal', () => ({
@@ -13,7 +13,7 @@ jest.mock('./TypeOverrideModal', () => ({
     if (!isOpen) return null;
     return (
       <div data-testid="type-override-modal">
-        <button data-testid="mock-save" onClick={() => onSave(mockSelectedType)}>
+        <button data-testid="mock-save" onClick={() => onSave(mockSelectedType, 'type', mockSelectedType.typeString)}>
           Save
         </button>
         <button data-testid="mock-attach" onClick={() => onAttach({ 'custom.xsd': '<xs:schema/>' })}>
@@ -32,6 +32,8 @@ jest.mock('../../../../services/field-type-override.service', () => ({
   FieldTypeOverrideService: {
     applyFieldTypeOverride: jest.fn(),
     revertFieldTypeOverride: jest.fn(),
+    applyFieldSubstitution: jest.fn(),
+    revertFieldSubstitution: jest.fn(),
     addSchemaFilesForTypeOverride: jest.fn(),
   },
 }));
@@ -87,7 +89,7 @@ describe('FieldTypeOverride', () => {
     const lastCall = TypeOverrideModalMock.mock.calls[TypeOverrideModalMock.mock.calls.length - 1];
     const onSaveCallback = lastCall[0].onSave;
 
-    onSaveCallback(mockSelectedType);
+    onSaveCallback(mockSelectedType, 'type', mockSelectedType.typeString);
 
     expect(FieldTypeOverrideService.applyFieldTypeOverride).toHaveBeenCalledWith(
       field.ownerDocument,
@@ -110,7 +112,7 @@ describe('FieldTypeOverride', () => {
     const lastCall = TypeOverrideModalMock.mock.calls[TypeOverrideModalMock.mock.calls.length - 1];
     const onSaveCallback = lastCall[0].onSave;
 
-    onSaveCallback(mockSelectedType);
+    onSaveCallback(mockSelectedType, 'type', mockSelectedType.typeString);
 
     expect(FieldTypeOverrideService.addSchemaFilesForTypeOverride).not.toHaveBeenCalled();
     expect(FieldTypeOverrideService.applyFieldTypeOverride).toHaveBeenCalled();
@@ -171,7 +173,7 @@ describe('FieldTypeOverride', () => {
   });
 });
 
-describe('revertTypeOverride', () => {
+describe('revertOverride', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -182,7 +184,7 @@ describe('revertTypeOverride', () => {
     const namespaceMap = { xs: 'http://www.w3.org/2001/XMLSchema' };
     const mockUpdateDocument = jest.fn();
 
-    revertTypeOverride(field, namespaceMap, mockUpdateDocument);
+    revertOverride(field, namespaceMap, mockUpdateDocument);
 
     expect(FieldTypeOverrideService.revertFieldTypeOverride).toHaveBeenCalledWith(
       field.ownerDocument,

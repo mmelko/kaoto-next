@@ -12,7 +12,7 @@ jest.mock('../../../../hooks/useDataMapper', () => ({
 
 jest.mock('./FieldTypeOverride', () => ({
   FieldTypeOverride: jest.fn(({ isOpen }) => (isOpen ? <div data-testid="field-type-override" /> : null)),
-  revertTypeOverride: jest.fn(),
+  revertOverride: jest.fn(),
 }));
 
 describe('FieldOverrideContextMenu', () => {
@@ -59,7 +59,7 @@ describe('FieldOverrideContextMenu', () => {
       </FieldOverrideContextMenu>,
     );
 
-    expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
   });
 
   it('should show context menu on right-click', () => {
@@ -75,7 +75,7 @@ describe('FieldOverrideContextMenu', () => {
       fireEvent.contextMenu(screen.getByTestId('child'));
     });
 
-    expect(screen.getByText('Override Type...')).toBeInTheDocument();
+    expect(screen.getByText('Override Field...')).toBeInTheDocument();
   });
 
   it('should not show context menu when field is undefined', () => {
@@ -89,7 +89,7 @@ describe('FieldOverrideContextMenu', () => {
       fireEvent.contextMenu(screen.getByTestId('child'));
     });
 
-    expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
   });
 
   it('should not show context menu when isReadOnly is true', () => {
@@ -105,7 +105,7 @@ describe('FieldOverrideContextMenu', () => {
       fireEvent.contextMenu(screen.getByTestId('child'));
     });
 
-    expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
   });
 
   it('should close context menu on outside click', () => {
@@ -120,12 +120,12 @@ describe('FieldOverrideContextMenu', () => {
     act(() => {
       fireEvent.contextMenu(screen.getByTestId('child'));
     });
-    expect(screen.getByText('Override Type...')).toBeInTheDocument();
+    expect(screen.getByText('Override Field...')).toBeInTheDocument();
 
     act(() => {
       fireEvent.mouseDown(document.body);
     });
-    expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
   });
 
   it('should close context menu on Escape key', () => {
@@ -140,15 +140,15 @@ describe('FieldOverrideContextMenu', () => {
     act(() => {
       fireEvent.contextMenu(screen.getByTestId('child'));
     });
-    expect(screen.getByText('Override Type...')).toBeInTheDocument();
+    expect(screen.getByText('Override Field...')).toBeInTheDocument();
 
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
-    expect(screen.queryByText('Override Type...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Field...')).not.toBeInTheDocument();
   });
 
-  it('should open type override modal when Override Type is clicked', () => {
+  it('should open type override modal when Override Field is clicked', () => {
     const field = testTargetDoc.fields[0];
 
     render(
@@ -162,7 +162,7 @@ describe('FieldOverrideContextMenu', () => {
     });
 
     act(() => {
-      fireEvent.click(screen.getByText('Override Type...'));
+      fireEvent.click(screen.getByText('Override Field...'));
     });
 
     expect(screen.getByTestId('field-type-override')).toBeInTheDocument();
@@ -188,8 +188,8 @@ describe('FieldOverrideContextMenu', () => {
     field.typeOverride = FieldOverrideVariant.NONE;
   });
 
-  it('should call revertTypeOverride and onUpdate when Reset Override is clicked', () => {
-    const { revertTypeOverride } = jest.requireMock('./FieldTypeOverride');
+  it('should call revertOverride and onUpdate when Reset Override is clicked', () => {
+    const { revertOverride } = jest.requireMock('./FieldTypeOverride');
     const { useDataMapper } = jest.requireMock('../../../../hooks/useDataMapper');
     const mockUpdateDocument = jest.fn();
     useDataMapper.mockReturnValue({
@@ -214,7 +214,7 @@ describe('FieldOverrideContextMenu', () => {
       fireEvent.click(screen.getByText('Reset Override'));
     });
 
-    expect(revertTypeOverride).toHaveBeenCalledWith(field, testMappingTree.namespaceMap, mockUpdateDocument);
+    expect(revertOverride).toHaveBeenCalledWith(field, testMappingTree.namespaceMap, mockUpdateDocument);
     expect(mockOnUpdate).toHaveBeenCalled();
 
     // Clean up

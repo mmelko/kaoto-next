@@ -13,26 +13,31 @@ import {
   ModalFooter,
   ModalHeader,
   ModalVariant,
+  Radio,
   Select,
   SelectList,
   SelectOption,
+  Split,
+  SplitItem,
 } from '@patternfly/react-core';
 import { FileImportIcon, WrenchIcon } from '@patternfly/react-icons';
 import { FunctionComponent, MouseEvent, Ref, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useDataMapper } from '../../../../hooks/useDataMapper';
 import { IField, SCHEMA_FILE_NAME_PATTERN_XML } from '../../../../models/datamapper/document';
-import { IFieldTypeInfo, FieldOverrideVariant } from '../../../../models/datamapper/types';
+import { FieldOverrideVariant, IFieldTypeInfo } from '../../../../models/datamapper/types';
 import { MetadataContext } from '../../../../providers';
 import { FieldTypeOverrideService } from '../../../../services/field-type-override.service';
 import { formatQNameWithPrefix } from '../../../../services/qname-util';
 import { getFileName, pickAndValidateSchemaFiles } from '../utils';
 import { SchemaFileList } from './SchemaFileList';
 
+export type OverrideMode = 'type' | 'substitution';
+
 export type TypeOverrideModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (selectedType: IFieldTypeInfo | null) => void;
+  onSave: (selectedType: IFieldTypeInfo | null, mode: OverrideMode, selectedKey: string | null) => void;
   onAttach: (schemas: Record<string, string>) => void;
   onRemove: () => void;
   field: IField;
@@ -48,48 +53,78 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
 }) => {
   const api = useContext(MetadataContext)!;
   const { mappingTree } = useDataMapper();
-  const [selectedType, setSelectedType] = useState<IFieldTypeInfo | null>(null);
-  const [typeCandidates, setTypeCandidates] = useState<Record<string, IFieldTypeInfo>>({});
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<Record<string, IFieldTypeInfo>>({});
   const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [uploadedSchemas, setUploadedSchemas] = useState<Record<string, string>>({});
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [overrideMode, setOverrideMode] = useState<OverrideMode>('type');
+
+  const selectedCandidate = selectedKey ? (candidates[selectedKey] ?? null) : null;
 
   const existingFiles = useMemo(
     () => Object.keys(field?.ownerDocument?.definition?.definitionFiles ?? {}),
     [field?.ownerDocument?.definition?.definitionFiles],
   );
 
-  const loadTypeCandidates = useCallback(() => {
-    if (!field) return;
-
-    const namespaceMap = mappingTree.namespaceMap;
-
-    // Get safe type candidates (extensions/restrictions of the field's type, or all types for anyType)
-    const candidates = FieldTypeOverrideService.getSafeOverrideCandidates(field, namespaceMap);
-    setTypeCandidates(candidates);
-
-    // If field has an existing override, pre-select it by matching namespace URI + local part
-    if (field.typeOverride !== FieldOverrideVariant.NONE && field.typeQName) {
-      const typeString = formatQNameWithPrefix(field.typeQName, namespaceMap, field.type);
-      setSelectedType(candidates[typeString] || null);
-    } else {
-      setSelectedType(null);
-    }
+  const hasSubstitutionCandidates = useMemo(() => {
+    if (!field) return false;
+    return (
+      Object.keys(FieldTypeOverrideService.getFieldSubstitutionCandidates(field, mappingTree.namespaceMap)).length > 0
+    );
   }, [field, mappingTree.namespaceMap]);
 
-  // Reload type candidates when the modal opens, or when definition files change (e.g., after schema attachment)
+  const showModeToggle = hasSubstitutionCandidates;
+
+  function getCandidatesForMode(mode: OverrideMode): Record<string, IFieldTypeInfo> {
+    if (!field) return {};
+    const namespaceMap = mappingTree.namespaceMap;
+    return mode === 'substitution'
+      ? FieldTypeOverrideService.getFieldSubstitutionCandidates(field, namespaceMap)
+      : FieldTypeOverrideService.getSafeOverrideCandidates(field, namespaceMap);
+  }
+
+  function preselectKeyForMode(mode: OverrideMode, availableCandidates: Record<string, IFieldTypeInfo>): string | null {
+    if (!field) return null;
+    if (
+      mode === 'type' &&
+      field.typeOverride !== FieldOverrideVariant.NONE &&
+      field.typeOverride !== FieldOverrideVariant.SUBSTITUTION &&
+      field.typeQName
+    ) {
+      const typeString = formatQNameWithPrefix(field.typeQName, mappingTree.namespaceMap, field.type);
+      return typeString in availableCandidates ? typeString : null;
+    }
+    return null;
+  }
+
+  function loadCandidatesForMode(mode: OverrideMode) {
+    const availableCandidates = getCandidatesForMode(mode);
+    setCandidates(availableCandidates);
+    setSelectedKey(preselectKeyForMode(mode, availableCandidates));
+  }
+
+  // Set initial mode and load candidates when modal opens or definition files change
   useEffect(() => {
     if (isOpen && field) {
-      loadTypeCandidates();
+      const mode = field.typeOverride === FieldOverrideVariant.SUBSTITUTION ? 'substitution' : 'type';
+      setOverrideMode(mode);
+      loadCandidatesForMode(mode);
     }
-  }, [isOpen, field, loadTypeCandidates, existingFiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, field, existingFiles]);
+
+  const handleModeChange = (mode: OverrideMode) => {
+    setOverrideMode(mode);
+    loadCandidatesForMode(mode);
+  };
 
   // Clean up transient state when modal closes
   useEffect(() => {
     if (!isOpen) return;
     return () => {
       setUploadError(null);
-      setSelectedType(null);
+      setSelectedKey(null);
       setIsSelectOpen(false);
       setUploadedSchemas({});
     };
@@ -123,14 +158,13 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
 
   const handleTypeSelect = useCallback(
     (_event: MouseEvent | undefined, value: string | number | undefined) => {
-      const typeString = value as string;
-      const typeInfo = typeCandidates[typeString];
-      if (typeInfo) {
-        setSelectedType(typeInfo);
+      const key = value as string;
+      if (key in candidates) {
+        setSelectedKey(key);
       }
       setIsSelectOpen(false);
     },
-    [typeCandidates],
+    [candidates],
   );
 
   const readSchemaFiles = useCallback(
@@ -190,25 +224,30 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
   }, [api, uploadedSchemas, field, readSchemaFiles, onAttach]);
 
   const handleSave = useCallback(() => {
-    onSave(selectedType);
-  }, [selectedType, onSave]);
+    onSave(selectedCandidate, overrideMode, selectedKey);
+  }, [selectedCandidate, selectedKey, overrideMode, onSave]);
 
   const handleToggleSelect = useCallback(() => {
     setIsSelectOpen(!isSelectOpen);
   }, [isSelectOpen]);
 
+  const isSubstitutionMode = overrideMode === 'substitution';
+  const selectLabel = isSubstitutionMode ? 'Substitute Element' : 'New Type';
+  const selectPlaceholder = isSubstitutionMode ? 'Select a substitute element...' : 'Select a new type...';
+
   const renderToggle = useCallback(
     (toggleRef: Ref<MenuToggleElement>) => (
       <MenuToggle ref={toggleRef} onClick={handleToggleSelect} isExpanded={isSelectOpen} isFullWidth>
-        {selectedType?.displayName || 'Select a new type...'}
+        {selectedCandidate?.displayName || selectPlaceholder}
       </MenuToggle>
     ),
-    [handleToggleSelect, isSelectOpen, selectedType?.displayName],
+    [handleToggleSelect, isSelectOpen, selectedCandidate?.displayName, selectPlaceholder],
   );
 
   const hasExistingOverride = field?.typeOverride !== FieldOverrideVariant.NONE;
 
-  const originalTypeDisplay = field?.originalField?.typeQName?.toString() || field?.originalField?.type || field?.type || 'Unknown';
+  const originalTypeDisplay =
+    field?.originalField?.typeQName?.toString() || field?.originalField?.type || field?.type || 'Unknown';
   const fieldName = field?.displayName || field?.name || 'Field';
   const fieldPath = field?.path?.toString() || '';
   const modalTitle = (
@@ -216,7 +255,7 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
       <Icon size="md" status="warning" isInline>
         <WrenchIcon />
       </Icon>{' '}
-      Type Override: {fieldName}
+      Field Override: {fieldName}
     </>
   );
 
@@ -243,11 +282,36 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
             </p>
           </FormGroup>
 
-          <FormGroup label="New Type" fieldId="type-select" isRequired>
+          {showModeToggle && (
+            <FormGroup label="Override Mode" fieldId="override-mode" role="radiogroup">
+              <Split hasGutter>
+                <SplitItem>
+                  <Radio
+                    id="mode-type"
+                    name="override-mode"
+                    label="Override Type"
+                    isChecked={overrideMode === 'type'}
+                    onChange={() => handleModeChange('type')}
+                  />
+                </SplitItem>
+                <SplitItem>
+                  <Radio
+                    id="mode-substitution"
+                    name="override-mode"
+                    label="Substitute Element"
+                    isChecked={overrideMode === 'substitution'}
+                    onChange={() => handleModeChange('substitution')}
+                  />
+                </SplitItem>
+              </Split>
+            </FormGroup>
+          )}
+
+          <FormGroup label={selectLabel} fieldId="type-select" isRequired>
             <Select
               id="type-select"
               isOpen={isSelectOpen}
-              selected={selectedType?.typeString}
+              selected={selectedKey}
               onSelect={handleTypeSelect}
               onOpenChange={(isOpen) => setIsSelectOpen(isOpen)}
               toggle={renderToggle}
@@ -257,19 +321,19 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
               }}
             >
               <SelectList>
-                {Object.entries(typeCandidates)
+                {Object.entries(candidates)
                   .sort(([, a], [, b]) => a.displayName.localeCompare(b.displayName))
-                  .map(([typeString, typeInfo]) => (
-                    <SelectOption key={typeString} value={typeString}>
+                  .map(([key, typeInfo]) => (
+                    <SelectOption key={key} value={key}>
                       {typeInfo.displayName}
                     </SelectOption>
                   ))}
               </SelectList>
             </Select>
-            {selectedType?.description && (
+            {selectedCandidate?.description && (
               <FormHelperText>
                 <HelperText>
-                  <HelperTextItem>{selectedType.description}</HelperTextItem>
+                  <HelperTextItem>{selectedCandidate.description}</HelperTextItem>
                 </HelperText>
               </FormHelperText>
             )}
@@ -305,7 +369,7 @@ export const TypeOverrideModal: FunctionComponent<TypeOverrideModalProps> = ({
         <Button key="cancel" variant="link" onClick={onClose}>
           Cancel
         </Button>
-        <Button key="save" variant="primary" onClick={handleSave} isDisabled={!selectedType}>
+        <Button key="save" variant="primary" onClick={handleSave} isDisabled={!selectedKey}>
           Save
         </Button>
       </ModalFooter>

@@ -4,7 +4,7 @@ import { useDataMapper } from '../../../../hooks/useDataMapper';
 import { IField } from '../../../../models/datamapper/document';
 import { FieldOverrideVariant } from '../../../../models/datamapper/types';
 import { FieldContextMenu } from '../FieldContextMenu';
-import { FieldTypeOverride, revertTypeOverride } from './FieldTypeOverride';
+import { FieldTypeOverride, revertOverride } from './FieldTypeOverride';
 
 type FieldOverrideContextMenuProps = {
   field: IField | undefined;
@@ -75,7 +75,7 @@ export const FieldOverrideContextMenu: FunctionComponent<FieldOverrideContextMen
 
   const handleResetOverride = useCallback(() => {
     if (field) {
-      revertTypeOverride(field, mappingTree.namespaceMap, updateDocument);
+      revertOverride(field, mappingTree.namespaceMap, updateDocument);
       onUpdate();
     }
   }, [field, mappingTree.namespaceMap, updateDocument, onUpdate]);
