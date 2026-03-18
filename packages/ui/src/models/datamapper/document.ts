@@ -43,6 +43,7 @@ export type IParentType = IDocument | IField;
  */
 export interface IOriginalFieldState {
   name: string;
+  displayName: string;
   namespaceURI: string | null;
   namespacePrefix: string | null;
   type: Types;

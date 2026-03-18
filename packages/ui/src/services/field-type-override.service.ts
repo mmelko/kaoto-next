@@ -560,6 +560,7 @@ export class FieldTypeOverrideService {
     );
     if (field.originalField) {
       field.name = field.originalField.name;
+      field.displayName = field.originalField.displayName;
       field.namespaceURI = field.originalField.namespaceURI;
       field.namespacePrefix = field.originalField.namespacePrefix;
       field.type = field.originalField.type;

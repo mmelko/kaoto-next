@@ -74,6 +74,7 @@ export class DocumentUtilService {
   private static captureOriginalFieldState(field: IField): IOriginalFieldState {
     return {
       name: field.name,
+      displayName: field.displayName,
       namespaceURI: field.namespaceURI,
       namespacePrefix: field.namespacePrefix,
       type: field.type,
@@ -128,6 +129,7 @@ export class DocumentUtilService {
   static applySubstitutionToField(field: IField, info: IFieldSubstituteInfo): void {
     field.originalField ??= DocumentUtilService.captureOriginalFieldState(field);
     field.name = info.name;
+    field.displayName = info.name;
     field.namespaceURI = info.namespaceURI;
     field.namespacePrefix = info.namespacePrefix;
     field.type = info.type;
