@@ -9,6 +9,7 @@ import {
 } from '../models/datamapper';
 import { NS_XML_SCHEMA } from '../models/datamapper/standard-namespaces';
 import { FieldOverrideVariant } from '../models/datamapper/types';
+import { QName } from '../xml-schema-ts/QName';
 import {
   getFieldSubstitutionNoNsXsd,
   getFieldSubstitutionXsd,
@@ -896,7 +897,7 @@ describe('FieldTypeOverrideService', () => {
       const namespaceMap = { sub: NS_SUBSTITUTION };
       const abstractAnimalField = doc.fields[0];
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'sub:Cat', namespaceMap);
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(NS_SUBSTITUTION, 'Cat'), namespaceMap);
 
       expect(doc.definition.fieldSubstitutions).toHaveLength(1);
       expect(doc.definition.fieldSubstitutions![0].name).toBe('sub:Cat');
@@ -910,7 +911,7 @@ describe('FieldTypeOverrideService', () => {
       const abstractAnimalField = doc.fields[0];
       const originalName = abstractAnimalField.name;
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'sub:Cat', namespaceMap);
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(NS_SUBSTITUTION, 'Cat'), namespaceMap);
       expect(abstractAnimalField.typeOverride).toBe(FieldOverrideVariant.SUBSTITUTION);
 
       FieldTypeOverrideService.revertFieldSubstitution(doc, abstractAnimalField, namespaceMap);
@@ -939,7 +940,7 @@ describe('FieldTypeOverrideService', () => {
       );
 
       expect(() => {
-        FieldTypeOverrideService.applyFieldSubstitution(jsonDocument, field, 'sub:Cat', {});
+        FieldTypeOverrideService.applyFieldSubstitution(jsonDocument, field, new QName(null, 'Cat'), {});
       }).not.toThrow();
     });
 
@@ -948,8 +949,8 @@ describe('FieldTypeOverrideService', () => {
       const namespaceMap = { sub: NS_SUBSTITUTION };
       const abstractAnimalField = doc.fields[0];
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'sub:Cat', namespaceMap);
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'sub:Dog', namespaceMap);
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(NS_SUBSTITUTION, 'Cat'), namespaceMap);
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(NS_SUBSTITUTION, 'Dog'), namespaceMap);
 
       expect(doc.definition.fieldSubstitutions).toHaveLength(1);
       expect(doc.definition.fieldSubstitutions![0].name).toBe('sub:Dog');
@@ -972,7 +973,7 @@ describe('FieldTypeOverrideService', () => {
       const abstractAnimalField = doc.fields[0];
       const originalName = abstractAnimalField.name;
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'Cat', {});
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(null, 'Cat'), {});
 
       expect(doc.definition.fieldSubstitutions).toHaveLength(1);
       expect(doc.definition.fieldSubstitutions![0].name).toBe('Cat');
@@ -987,7 +988,7 @@ describe('FieldTypeOverrideService', () => {
       const abstractAnimalField = doc.fields[0];
       const originalName = abstractAnimalField.name;
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'Cat', {});
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(null, 'Cat'), {});
       FieldTypeOverrideService.revertFieldSubstitution(doc, abstractAnimalField, {});
 
       expect(abstractAnimalField.name).toBe(originalName);
@@ -1010,8 +1011,8 @@ describe('FieldTypeOverrideService', () => {
       const doc = createNoNsSubstitutionDoc();
       const abstractAnimalField = doc.fields[0];
 
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'Cat', {});
-      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, 'Dog', {});
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(null, 'Cat'), {});
+      FieldTypeOverrideService.applyFieldSubstitution(doc, abstractAnimalField, new QName(null, 'Dog'), {});
 
       expect(doc.definition.fieldSubstitutions).toHaveLength(1);
       expect(doc.definition.fieldSubstitutions![0].name).toBe('Dog');

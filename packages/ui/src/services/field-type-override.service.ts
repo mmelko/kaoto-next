@@ -1,6 +1,7 @@
 import { DocumentDefinition, IDocument, IField, PrimitiveDocument } from '../models/datamapper/document';
 import { IChoiceSelection, IFieldSubstitution, IFieldTypeOverride } from '../models/datamapper/metadata';
 import { FieldOverrideVariant, IFieldTypeInfo, Types } from '../models/datamapper/types';
+import { QName } from '../xml-schema-ts/QName';
 import { DocumentUtilService, ParseTypeOverrideFn } from './document-util.service';
 import { JsonSchemaDocument } from './json-schema-document.model';
 import { JsonSchemaDocumentService } from './json-schema-document.service';
@@ -484,6 +485,13 @@ export class FieldTypeOverrideService {
     );
   }
 
+  private static ensureNamespaceRegistered(namespaceURI: string | null, namespaceMap: Record<string, string>): void {
+    if (!namespaceURI) return;
+    if (Object.values(namespaceMap).includes(namespaceURI)) return;
+    const prefix = DocumentUtilService.generateNamespacePrefix(namespaceMap);
+    namespaceMap[prefix] = namespaceURI;
+  }
+
   /**
    * Apply an element substitution to a field in a document.
    *
@@ -495,21 +503,24 @@ export class FieldTypeOverrideService {
    *
    * @param document - The document containing the field (must be XmlSchemaDocument)
    * @param field - The field to substitute
-   * @param substituteElementQName - The substitute element name in `prefix:localName` form
+   * @param substituteElement - QName identifying the substitute element
    * @param namespaceMap - Namespace prefix to URI mapping
    */
   static applyFieldSubstitution(
     document: IDocument,
     field: IField,
-    substituteElementQName: string,
+    substituteElement: QName,
     namespaceMap: Record<string, string>,
   ): void {
     if (!(document instanceof XmlSchemaDocument)) return;
+    const nsURI = substituteElement.getNamespaceURI() || null;
+    FieldTypeOverrideService.ensureNamespaceRegistered(nsURI, namespaceMap);
+    const substituteName = buildPrefixedName(substituteElement.getLocalPart()!, nsURI, namespaceMap);
     const schemaPath = SchemaPathService.buildOriginal(field, namespaceMap);
     const origName = field.originalField?.name ?? field.name;
     const origNsURI = field.originalField?.namespaceURI ?? field.namespaceURI;
     const originalName = buildPrefixedName(origName, origNsURI, namespaceMap);
-    const entry: IFieldSubstitution = { schemaPath, name: substituteElementQName, originalName };
+    const entry: IFieldSubstitution = { schemaPath, name: substituteName, originalName };
     document.definition.fieldSubstitutions ??= [];
     const existingIndex = document.definition.fieldSubstitutions.findIndex((s) => s.schemaPath === schemaPath);
     if (existingIndex >= 0) {
