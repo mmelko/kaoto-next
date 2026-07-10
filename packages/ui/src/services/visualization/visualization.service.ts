@@ -296,6 +296,21 @@ export class VisualizationService {
     return false;
   }
 
+  /**
+   * Determines whether wrapper children should be filtered to only members
+   * with existing FieldItems. Applies to target-side maxOccurs>1 wrappers
+   * without a selected member — each instance carries its own independent
+   * selection, so the single-value selection model does not apply and only
+   * mapped instances are shown.
+   */
+  private static shouldFilterToMappedMembers(node: NodeData): boolean {
+    if (node.isSource) return false;
+    if (!VisualizationService.isTargetWrapper(node)) return false;
+    const field = (node as TargetFieldNodeData).field;
+    if (DocumentUtilService.getSelectedMember(field)) return false;
+    return field.maxOccurs !== 1;
+  }
+
   private static resolveWrapperSpec(node: NodeData): { node: FieldNodeData; spec: WrapperSpec } | null {
     if (node instanceof ChoiceFieldNodeData || node instanceof TargetChoiceFieldNodeData)
       return { node, spec: CHOICE_WRAPPER };
@@ -332,11 +347,13 @@ export class VisualizationService {
       const { node, spec } = wrapperMatch;
       const mappings = VisualizationService.resolveWrapperNodeMappings(node, spec);
       if (VisualizationService.isUnconfiguredTargetWrapper(node, mappings)) return [];
-      return VisualizationService.doGenerateNodeDataFromFields(
-        node,
-        VisualizationService.resolveWrapperNodeFields(node.field),
-        mappings,
-      );
+      let fields = VisualizationService.resolveWrapperNodeFields(node.field);
+      if (mappings && VisualizationService.shouldFilterToMappedMembers(node)) {
+        fields = fields.filter((f) =>
+          mappings.some((m) => m instanceof FieldItem && (m.field === f || DocumentService.isDescendant(f, m.field))),
+        );
+      }
+      return VisualizationService.doGenerateNodeDataFromFields(node, fields, mappings);
     }
     if (parent instanceof SequenceFieldNodeData || parent instanceof TargetSequenceFieldNodeData) {
       return VisualizationService.doGenerateNodeDataFromFields(

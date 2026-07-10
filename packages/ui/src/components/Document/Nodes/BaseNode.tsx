@@ -75,6 +75,7 @@ export const BaseNode: FunctionComponent<PropsWithChildren<BaseNodeProps>> = ({
   const choiceDepth = VisualizationUtilService.getSelectedChoiceDepth(nodeData);
   const isAbstractField = VisualizationUtilService.isAbstractField(nodeData);
   const isSelectedAbstract = VisualizationUtilService.isSelectedAbstractField(nodeData);
+  const isAbstractWrapperMember = VisualizationUtilService.isAbstractWrapperMember(nodeData);
   const isAttributeField = VisualizationUtilService.isAttributeField(nodeData);
   const isDraggable = MappingValidationService.isDraggable(nodeData);
   const isSource = nodeData.isSource;
@@ -147,6 +148,11 @@ export const BaseNode: FunctionComponent<PropsWithChildren<BaseNodeProps>> = ({
           status={isSelectedAbstract ? 'success' : undefined}
           data-testid="abstract-field-icon"
         >
+          <Choices />
+        </Icon>
+      )}
+      {isAbstractWrapperMember && (
+        <Icon className="node__spacer" status="success" data-testid="abstract-field-icon">
           <Choices />
         </Icon>
       )}

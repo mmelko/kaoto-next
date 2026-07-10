@@ -562,6 +562,125 @@ describe('VisualizationService / abstract fields', () => {
     });
   });
 
+  describe('S11: maxOccurs>1 wrapper filtering to mapped members', () => {
+    let localTargetDocNode: TargetDocumentNodeData;
+    let parentFieldNode: TargetFieldNodeData;
+    let abstractField: ReturnType<typeof createMockAbstractField>;
+
+    beforeEach(() => {
+      localTargetDocNode = new TargetDocumentNodeData(targetDoc, tree);
+      abstractField = createMockAbstractField([
+        { name: 'Cat', children: [{ name: 'catName' }] },
+        { name: 'Dog' },
+        { name: 'Fish' },
+        { name: 'Kitten' },
+      ]);
+      abstractField.maxOccurs = 'unbounded';
+      const parentField = {
+        ...targetDoc.fields[0],
+        fields: [abstractField],
+      };
+      parentFieldNode = new TargetFieldNodeData(localTargetDocNode, parentField as (typeof targetDoc.fields)[0]);
+    });
+
+    function engageMappingForCandidate(candidateIndex: number) {
+      const abstractNode = new TargetAbstractFieldNodeData(parentFieldNode, abstractField);
+      const candidateField = abstractField.fields[candidateIndex];
+      const candidateNode = new TargetFieldNodeData(abstractNode, candidateField);
+
+      const sourceDocChildren = VisualizationService.generateStructuredDocumentChildren(sourceDocNode);
+      const sourceFieldNode = sourceDocChildren[0] as FieldNodeData;
+      const sourceChildren = VisualizationService.generateNonDocumentNodeDataChildren(sourceFieldNode);
+
+      MappingActionService.engageMapping(tree, sourceChildren[0] as FieldNodeData, candidateNode);
+    }
+
+    function generateFreshAbstractChildren() {
+      const freshTargetDocNode = new TargetDocumentNodeData(targetDoc, tree);
+      const freshParentField = {
+        ...targetDoc.fields[0],
+        fields: [abstractField],
+      };
+      const freshParentNode = new TargetFieldNodeData(
+        freshTargetDocNode,
+        freshParentField as (typeof targetDoc.fields)[0],
+      );
+      freshParentNode.mapping = tree.children[0] as FieldItem;
+
+      const freshAbstractNode = new TargetAbstractFieldNodeData(freshParentNode, abstractField);
+      return VisualizationService.generateNonDocumentNodeDataChildren(freshAbstractNode);
+    }
+
+    it('maxOccurs>1 with one mapped member should return only that member', () => {
+      engageMappingForCandidate(0);
+
+      const children = generateFreshAbstractChildren();
+      const childNames = children.map((c) => c.title);
+      expect(childNames).toEqual(['Cat']);
+      expect(children[0]).toBeInstanceOf(FieldItemNodeData);
+    });
+
+    it('maxOccurs>1 with multiple mapped members should return only those', () => {
+      const parentField = {
+        ...targetDoc.fields[0],
+        fields: [abstractField],
+      };
+      const parentFieldItem = new FieldItem(tree, parentField as (typeof targetDoc.fields)[0]);
+      const catFieldItem = new FieldItem(tree, abstractField.fields[0]);
+      const fishFieldItem = new FieldItem(tree, abstractField.fields[2]);
+      parentFieldItem.children.push(catFieldItem, fishFieldItem);
+      tree.children.push(parentFieldItem);
+
+      const freshTargetDocNode = new TargetDocumentNodeData(targetDoc, tree);
+      const freshParentNode = new TargetFieldNodeData(freshTargetDocNode, parentField as (typeof targetDoc.fields)[0]);
+      freshParentNode.mapping = parentFieldItem;
+
+      const freshAbstractNode = new TargetAbstractFieldNodeData(freshParentNode, abstractField);
+      const children = VisualizationService.generateNonDocumentNodeDataChildren(freshAbstractNode);
+      const childNames = children.map((c) => c.title);
+      expect(childNames).toContain('Cat');
+      expect(childNames).toContain('Fish');
+      expect(childNames).not.toContain('Dog');
+      expect(childNames).not.toContain('Kitten');
+    });
+
+    it('maxOccurs>1 with no mapped members should return empty (S5 behavior)', () => {
+      const freshTargetDocNode = new TargetDocumentNodeData(targetDoc, tree);
+      const freshParentField = {
+        ...targetDoc.fields[0],
+        fields: [abstractField],
+      };
+      const freshParentNode = new TargetFieldNodeData(
+        freshTargetDocNode,
+        freshParentField as (typeof targetDoc.fields)[0],
+      );
+      const freshAbstractNode = new TargetAbstractFieldNodeData(freshParentNode, abstractField);
+      const children = VisualizationService.generateNonDocumentNodeDataChildren(freshAbstractNode);
+      expect(children).toHaveLength(0);
+    });
+
+    it('maxOccurs=1 without selection should return ALL candidates', () => {
+      abstractField.maxOccurs = 1;
+      engageMappingForCandidate(0);
+
+      const children = generateFreshAbstractChildren();
+      const childNames = children.map((c) => c.title);
+      expect(childNames).toContain('Cat');
+      expect(childNames).toContain('Dog');
+      expect(childNames).toContain('Fish');
+      expect(childNames).toContain('Kitten');
+    });
+
+    it('source-side maxOccurs>1 should still return all candidates', () => {
+      const sourceAbstractField = createMockAbstractField([{ name: 'Cat' }, { name: 'Dog' }, { name: 'Fish' }]);
+      sourceAbstractField.maxOccurs = 'unbounded';
+      const abstractNode = new AbstractFieldNodeData(sourceDocNode, sourceAbstractField);
+      const children = VisualizationService.generateNonDocumentNodeDataChildren(abstractNode);
+      expect(children).toHaveLength(3);
+      expect(children.map((c) => c.title)).toEqual(['Cat', 'Dog', 'Fish']);
+    });
+  });
+
   describe('mapping through selected target abstract wrapper', () => {
     it('engageMapping to a selected abstract candidate creates FieldItem for the candidate', () => {
       const abstractField = createMockAbstractField(

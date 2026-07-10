@@ -316,6 +316,43 @@ describe('VisualizationUtilService', () => {
     });
   });
 
+  describe('isAbstractWrapperMember', () => {
+    it('should return true for FieldItemNodeData under TargetAbstractFieldNodeData', () => {
+      const abstractField = createMockField(sourceDoc.fields[0], {
+        name: 'AbstractAnimal',
+        wrapperKind: 'abstract',
+      });
+      const candidateField = createMockField(sourceDoc.fields[0], {
+        name: 'Cat',
+        parent: abstractField,
+      });
+      const abstractNode = new TargetAbstractFieldNodeData(targetDocNode, abstractField);
+      const fieldItem = new FieldItem(targetDocNode.mappingTree, candidateField);
+      const fieldItemNode = new FieldItemNodeData(abstractNode, fieldItem);
+      expect(VisualizationUtilService.isAbstractWrapperMember(fieldItemNode)).toBe(true);
+    });
+
+    it('should return false for FieldItemNodeData under TargetDocumentNodeData', () => {
+      const fieldItem = new FieldItem(targetDocNode.mappingTree, sourceDoc.fields[0]);
+      const fieldItemNode = new FieldItemNodeData(targetDocNode, fieldItem);
+      expect(VisualizationUtilService.isAbstractWrapperMember(fieldItemNode)).toBe(false);
+    });
+
+    it('should return false for regular FieldNodeData', () => {
+      const fieldNode = new FieldNodeData(sourceDocNode, sourceDoc.fields[0]);
+      expect(VisualizationUtilService.isAbstractWrapperMember(fieldNode)).toBe(false);
+    });
+
+    it('should return false for AbstractFieldNodeData itself', () => {
+      const abstractField = createMockField(sourceDoc.fields[0], {
+        name: 'AbstractAnimal',
+        wrapperKind: 'abstract',
+      });
+      const abstractNode = new AbstractFieldNodeData(sourceDocNode, abstractField);
+      expect(VisualizationUtilService.isAbstractWrapperMember(abstractNode)).toBe(false);
+    });
+  });
+
   describe('isTerminalField', () => {
     it('should return true for FieldNodeData with no children (terminal/primitive field)', () => {
       // Create a field with no children - a primitive/terminal field

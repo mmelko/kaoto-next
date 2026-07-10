@@ -17,6 +17,7 @@ import { ChoiceSelectionService } from '../../../../services/document/choice-sel
 import { FieldOverrideService } from '../../../../services/document/field-override.service';
 import { XmlSchemaField } from '../../../../services/document/xml-schema/xml-schema-document.model';
 import { XmlSchemaDocumentService } from '../../../../services/document/xml-schema/xml-schema-document.service';
+import { MappingActionService } from '../../../../services/visualization/mapping-action.service';
 import { TreeParsingService } from '../../../../services/visualization/tree-parsing.service';
 import { VisualizationService } from '../../../../services/visualization/visualization.service';
 import { getChoiceWithAbstractXsd, TestUtil } from '../../../../stubs/datamapper/data-mapper';
@@ -494,42 +495,39 @@ describe('useChoiceContextMenu', () => {
     });
   });
 
+  const createTargetChoiceFieldNode = (maxOccurs?: number | 'unbounded') => {
+    const document = TestUtil.createTargetOrderDoc();
+    const mappingTree = new MappingTree(document.documentType, document.documentId, DocumentDefinitionType.XML_SCHEMA);
+    const documentNodeData = new TargetDocumentNodeData(document, mappingTree);
+    const parentField = document.fields[0];
+
+    const choiceField = new XmlSchemaField(parentField, 'contactChoice', false);
+    choiceField.displayName = 'Contact Choice';
+    choiceField.type = Types.Container;
+    choiceField.wrapperKind = 'choice';
+    choiceField.selectedMemberIndex = undefined;
+    if (maxOccurs !== undefined) choiceField.maxOccurs = maxOccurs;
+
+    const emailField = new XmlSchemaField(choiceField, 'email', false);
+    emailField.displayName = 'Email';
+    emailField.type = Types.String;
+
+    const phoneField = new XmlSchemaField(choiceField, 'phone', false);
+    phoneField.displayName = 'Phone';
+    phoneField.type = Types.String;
+
+    choiceField.fields = [emailField, phoneField];
+    parentField.fields.push(choiceField);
+
+    const tree = new DocumentTree(documentNodeData);
+    TreeParsingService.parseTree(tree);
+    const orderNode = tree.root.children[0];
+    const lastChild = orderNode.children.length - 1;
+    const choiceNode = orderNode.children[lastChild];
+    return { documentNodeData, choiceNode, choiceField, mappingTree };
+  };
+
   describe('target-side choice wrapper', () => {
-    const createTargetChoiceFieldNode = () => {
-      const document = TestUtil.createTargetOrderDoc();
-      const mappingTree = new MappingTree(
-        document.documentType,
-        document.documentId,
-        DocumentDefinitionType.XML_SCHEMA,
-      );
-      const documentNodeData = new TargetDocumentNodeData(document, mappingTree);
-      const parentField = document.fields[0];
-
-      const choiceField = new XmlSchemaField(parentField, 'contactChoice', false);
-      choiceField.displayName = 'Contact Choice';
-      choiceField.type = Types.Container;
-      choiceField.wrapperKind = 'choice';
-      choiceField.selectedMemberIndex = undefined;
-
-      const emailField = new XmlSchemaField(choiceField, 'email', false);
-      emailField.displayName = 'Email';
-      emailField.type = Types.String;
-
-      const phoneField = new XmlSchemaField(choiceField, 'phone', false);
-      phoneField.displayName = 'Phone';
-      phoneField.type = Types.String;
-
-      choiceField.fields = [emailField, phoneField];
-      parentField.fields.push(choiceField);
-
-      const tree = new DocumentTree(documentNodeData);
-      TreeParsingService.parseTree(tree);
-      const orderNode = tree.root.children[0];
-      const lastChild = orderNode.children.length - 1;
-      const choiceNode = orderNode.children[lastChild];
-      return { documentNodeData, choiceNode, choiceField, mappingTree };
-    };
-
     it('should hide children for unconfigured target choice wrapper', () => {
       const { choiceNode } = createTargetChoiceFieldNode();
       expect(VisualizationService.hasChildren(choiceNode.nodeData)).toBe(false);
@@ -621,6 +619,90 @@ describe('useChoiceContextMenu', () => {
       const choiceTargetNode = choiceNode.nodeData as TargetChoiceFieldNodeData;
       choiceTargetNode.mapping = new FieldItem(mappingTree, choiceField.fields[0]);
       expect(VisualizationService.hasChildren(choiceTargetNode)).toBe(true);
+    });
+  });
+
+  describe('target-side choice wrapper with maxOccurs>1', () => {
+    it('should NOT call setChoiceSelection when selecting member on maxOccurs>1 choice', () => {
+      const { documentNodeData, choiceNode } = createTargetChoiceFieldNode('unbounded');
+      const setSpy = vi.spyOn(ChoiceSelectionService, 'setChoiceSelection');
+      const targetSelectionSpy = vi.spyOn(MappingActionService, 'applyTargetSelection');
+
+      render(
+        <TargetDocumentNodeWithContextMenu
+          treeNode={choiceNode}
+          documentId={documentNodeData.id}
+          isReadOnly={false}
+          rank={1}
+        />,
+        { wrapper },
+      );
+
+      act(() => {
+        fireEvent.contextMenu(screen.getByTestId(`node-target-${choiceNode.nodeData.id}`));
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByText('Email'));
+      });
+
+      expect(setSpy).not.toHaveBeenCalled();
+      expect(targetSelectionSpy).toHaveBeenCalled();
+      setSpy.mockRestore();
+      targetSelectionSpy.mockRestore();
+    });
+
+    it('should not set selectedMemberIndex on wrapper after selection on maxOccurs>1 choice', () => {
+      const { documentNodeData, choiceNode, choiceField } = createTargetChoiceFieldNode('unbounded');
+      vi.spyOn(MappingActionService, 'applyTargetSelection').mockImplementation(vi.fn());
+
+      render(
+        <TargetDocumentNodeWithContextMenu
+          treeNode={choiceNode}
+          documentId={documentNodeData.id}
+          isReadOnly={false}
+          rank={1}
+        />,
+        { wrapper },
+      );
+
+      act(() => {
+        fireEvent.contextMenu(screen.getByTestId(`node-target-${choiceNode.nodeData.id}`));
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByText('Phone'));
+      });
+
+      expect(choiceField.selectedMemberIndex).toBeUndefined();
+      vi.restoreAllMocks();
+    });
+
+    it('should still call setChoiceSelection for maxOccurs=1 choice (regression)', () => {
+      const { documentNodeData, choiceNode, choiceField } = createTargetChoiceFieldNode('unbounded');
+      choiceField.maxOccurs = 1;
+      const setSpy = vi.spyOn(ChoiceSelectionService, 'setChoiceSelection');
+
+      render(
+        <TargetDocumentNodeWithContextMenu
+          treeNode={choiceNode}
+          documentId={documentNodeData.id}
+          isReadOnly={false}
+          rank={1}
+        />,
+        { wrapper },
+      );
+
+      act(() => {
+        fireEvent.contextMenu(screen.getByTestId(`node-target-${choiceNode.nodeData.id}`));
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByText('Email'));
+      });
+
+      expect(setSpy).toHaveBeenCalledWith(expect.any(Object), choiceField, 0, expect.any(Object));
+      setSpy.mockRestore();
     });
   });
 

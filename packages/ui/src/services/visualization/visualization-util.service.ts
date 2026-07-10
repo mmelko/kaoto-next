@@ -153,6 +153,10 @@ export class VisualizationUtilService {
     return VisualizationUtilService.isAbstractField(nodeData) && !nodeData.abstractField;
   }
 
+  static isAbstractWrapperMember(nodeData: NodeData): boolean {
+    return nodeData instanceof FieldItemNodeData && nodeData.parent instanceof TargetAbstractFieldNodeData;
+  }
+
   /**
    * Returns `true` if the node is a sequence wrapper field, on either source or target side.
    * @param nodeData - The node to test.

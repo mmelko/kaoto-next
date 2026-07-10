@@ -4,10 +4,12 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { useDataMapper } from '../../../../hooks/useDataMapper';
 import { IField } from '../../../../models/datamapper/document';
+import { FieldItem } from '../../../../models/datamapper/mapping';
 import { IFieldSubstituteInfo } from '../../../../models/datamapper/types';
-import { NodeData, TargetNodeData } from '../../../../models/datamapper/visualization';
+import { FieldItemNodeData, NodeData, TargetNodeData } from '../../../../models/datamapper/visualization';
 import { DocumentUtilService } from '../../../../services/document/document-util.service';
 import { FieldOverrideService } from '../../../../services/document/field-override.service';
+import { MappingService } from '../../../../services/mapping/mapping.service';
 import { SchemaPathService } from '../../../../services/schema-path.service';
 import { MappingActionService } from '../../../../services/visualization/mapping-action.service';
 import { MenuAction, MenuGroup } from '../FieldContextMenu';
@@ -16,6 +18,24 @@ import { buildSelectSelfAction, findCandidateQName, resolveAbstractFieldInfo } f
 import { MenuContributor } from './types';
 
 const INLINE_SUBSTITUTION_LIMIT = 10;
+
+function resolveCandidateField(
+  wrapperField: IField,
+  qname: string,
+  cachedCandidates: Record<string, IFieldSubstituteInfo>,
+  knownWrapper: IField | undefined,
+  namespaceMap: Record<string, string>,
+): IField | undefined {
+  const resolvedCandidates =
+    wrapperField === knownWrapper
+      ? cachedCandidates
+      : FieldOverrideService.getFieldSubstitutionCandidates(wrapperField, namespaceMap);
+  const candidate = resolvedCandidates[qname];
+  if (!candidate) return undefined;
+  return wrapperField.fields?.find(
+    (f) => f.name === candidate.qname.getLocalPart() && f.namespaceURI === candidate.qname.getNamespaceURI(),
+  );
+}
 
 function buildInlineSubstitutionActions(
   candidates: Record<string, IFieldSubstituteInfo>,
@@ -70,6 +90,7 @@ export function useAbstractFieldSubstitutionMenu(nodeData: NodeData): MenuContri
     isAbstractWrapper,
     isSelectedSubstitution,
     isSubstitutionCandidate,
+    isAbstractWrapperMember,
     abstractWrapperField,
     field,
     parentAbstractField,
@@ -93,33 +114,71 @@ export function useAbstractFieldSubstitutionMenu(nodeData: NodeData): MenuContri
   const isTargetSide = !nodeData.isSource;
 
   const applySubstitution = useCallback(
-    (field: IField, qname: string) => {
-      FieldOverrideService.applyFieldSubstitution(field, qname, mappingTree.namespaceMap);
-
-      if (isTargetSide) {
-        const selectedMember = DocumentUtilService.getSelectedMember(field);
-        if (selectedMember) MappingActionService.applyTargetSelection(nodeData as TargetNodeData, selectedMember);
+    (wrapperField: IField, qname: string) => {
+      if (isAbstractWrapperMember && nodeData instanceof FieldItemNodeData) {
+        const candidateField = resolveCandidateField(
+          wrapperField,
+          qname,
+          candidates,
+          abstractWrapperField,
+          mappingTree.namespaceMap,
+        );
+        if (candidateField && nodeData.mapping instanceof FieldItem) {
+          MappingService.updateFieldItemField(nodeData.mapping, candidateField);
+        }
+      } else if (isTargetSide && wrapperField.maxOccurs !== 1) {
+        const candidateField = resolveCandidateField(
+          wrapperField,
+          qname,
+          candidates,
+          abstractWrapperField,
+          mappingTree.namespaceMap,
+        );
+        if (candidateField) {
+          MappingActionService.applyTargetSelection(nodeData as TargetNodeData, candidateField);
+        }
+      } else {
+        FieldOverrideService.applyFieldSubstitution(wrapperField, qname, mappingTree.namespaceMap);
+        if (isTargetSide) {
+          const selectedMember = DocumentUtilService.getSelectedMember(wrapperField);
+          if (selectedMember) MappingActionService.applyTargetSelection(nodeData as TargetNodeData, selectedMember);
+        }
       }
 
-      const doc = field.ownerDocument;
+      const doc = wrapperField.ownerDocument;
       const previousRefId = doc.getReferenceId(mappingTree.namespaceMap);
       updateDocument(doc, doc.definition, previousRefId);
     },
-    [isTargetSide, mappingTree.namespaceMap, nodeData, updateDocument],
+    [
+      abstractWrapperField,
+      isAbstractWrapperMember,
+      isTargetSide,
+      candidates,
+      mappingTree.namespaceMap,
+      nodeData,
+      updateDocument,
+    ],
   );
 
   const applyClearSubstitution = useCallback(
-    (field: IField) => {
-      if (isTargetSide) MappingActionService.clearTargetSelection(nodeData as TargetNodeData, field);
+    (wrapperField: IField) => {
+      if (isAbstractWrapperMember && nodeData instanceof FieldItemNodeData && nodeData.mapping instanceof FieldItem) {
+        const mapping = nodeData.mapping;
+        const idx = mapping.parent.children.indexOf(mapping);
+        if (idx !== -1) mapping.parent.children.splice(idx, 1);
+      } else {
+        if (isTargetSide) MappingActionService.clearTargetSelection(nodeData as TargetNodeData, wrapperField);
+        const doc = wrapperField.ownerDocument;
+        const schemaPath = SchemaPathService.build(wrapperField, mappingTree.namespaceMap);
+        DocumentUtilService.invalidateDescendants(doc, schemaPath);
+        FieldOverrideService.revertFieldSubstitution(wrapperField, mappingTree.namespaceMap);
+      }
 
-      const doc = field.ownerDocument;
-      const schemaPath = SchemaPathService.build(field, mappingTree.namespaceMap);
-      DocumentUtilService.invalidateDescendants(doc, schemaPath);
-      FieldOverrideService.revertFieldSubstitution(field, mappingTree.namespaceMap);
+      const doc = wrapperField.ownerDocument;
       const previousRefId = doc.getReferenceId(mappingTree.namespaceMap);
       updateDocument(doc, doc.definition, previousRefId);
     },
-    [isTargetSide, mappingTree.namespaceMap, nodeData, updateDocument],
+    [isAbstractWrapperMember, isTargetSide, mappingTree.namespaceMap, nodeData, updateDocument],
   );
 
   // Case A: select a substitute from this node's own wrapper candidate list
@@ -157,12 +216,17 @@ export function useAbstractFieldSubstitutionMenu(nodeData: NodeData): MenuContri
     ? buildSelectSelfAction(field, parentAbstractField, handleSelectSelfAsCandidate, 'select-substitution-member')
     : undefined;
 
+  const memberSelectedQName = useMemo(() => {
+    if (!isAbstractWrapperMember || !abstractWrapperField || !field) return undefined;
+    return findCandidateQName(candidates, field);
+  }, [isAbstractWrapperMember, abstractWrapperField, candidates, field]);
+
   let menuGroups: MenuGroup[];
-  if (isAbstractWrapper) {
+  if (isAbstractWrapper || isAbstractWrapperMember) {
     menuGroups = buildAbstractWrapperMenuGroups(
       candidates,
-      selectedQName,
-      selectSelfAction,
+      isAbstractWrapperMember ? memberSelectedQName : selectedQName,
+      isAbstractWrapperMember ? undefined : selectSelfAction,
       clearSubstitutionAction,
       handleSelectSubstitution,
       handleOpenSubstitutionModal,

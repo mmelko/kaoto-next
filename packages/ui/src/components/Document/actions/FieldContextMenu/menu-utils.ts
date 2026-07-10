@@ -26,6 +26,7 @@ export interface AbstractFieldInfo {
   isAbstractWrapper: boolean;
   isSelectedSubstitution: boolean;
   isSubstitutionCandidate: boolean;
+  isAbstractWrapperMember: boolean;
   abstractWrapperField: IField | undefined;
   field: IField | undefined;
   parentAbstractField: IField | undefined;
@@ -36,6 +37,7 @@ export function resolveAbstractFieldInfo(nodeData: NodeData, namespaceMap: Recor
   const field = VisualizationUtilService.getField(nodeData);
   const isAbstractWrapper = field?.wrapperKind === 'abstract';
   const isSelectedSubstitution = VisualizationUtilService.isAbstractField(nodeData);
+  const isAbstractWrapperMember = VisualizationUtilService.isAbstractWrapperMember(nodeData);
 
   const candidateParent = field?.parent && 'wrapperKind' in field.parent ? field.parent : undefined;
   const isSubstitutionCandidate = candidateParent?.wrapperKind === 'abstract';
@@ -52,12 +54,15 @@ export function resolveAbstractFieldInfo(nodeData: NodeData, namespaceMap: Recor
     abstractWrapperField = field;
   } else if (isSelectedSubstitution) {
     abstractWrapperField = nodeData.abstractField;
+  } else if (isAbstractWrapperMember && parentAbstractField) {
+    abstractWrapperField = parentAbstractField;
   }
 
   return {
     isAbstractWrapper,
     isSelectedSubstitution,
     isSubstitutionCandidate,
+    isAbstractWrapperMember,
     abstractWrapperField,
     field,
     parentAbstractField,

@@ -172,10 +172,35 @@ export function useChoiceContextMenu(nodeData: NodeData): MenuContributor {
     return dissolveMembers(members, mappingTree.namespaceMap);
   }, [activeChoiceWrapperForMembers?.fields, mappingTree.namespaceMap]);
 
-  const applyChoiceSelection = useCallback(
+  const applyUnboundedChoiceSelection = useCallback(
     (wrapper: IField, selection: MemberSelection) => {
-      const doc = wrapper.ownerDocument;
-      ChoiceSelectionService.setChoiceSelection(doc, wrapper, selection.memberIndex, mappingTree.namespaceMap);
+      const memberField = wrapper.fields[selection.memberIndex];
+      if (!memberField) return;
+      let candidateField: IField | undefined = memberField;
+      if (selection.substituteQName) {
+        const candidates = FieldOverrideService.getFieldSubstitutionCandidates(memberField, mappingTree.namespaceMap);
+        const info = candidates[selection.substituteQName];
+        candidateField = info
+          ? memberField.fields?.find(
+              (f) => f.name === info.qname.getLocalPart() && f.namespaceURI === info.qname.getNamespaceURI(),
+            )
+          : undefined;
+      }
+      if (candidateField) {
+        MappingActionService.applyTargetSelection(nodeData as TargetNodeData, candidateField);
+      }
+    },
+    [mappingTree.namespaceMap, nodeData],
+  );
+
+  const applySingleChoiceSelection = useCallback(
+    (wrapper: IField, selection: MemberSelection) => {
+      ChoiceSelectionService.setChoiceSelection(
+        wrapper.ownerDocument,
+        wrapper,
+        selection.memberIndex,
+        mappingTree.namespaceMap,
+      );
 
       if (selection.substituteQName) {
         const abstractMember = wrapper.fields[selection.memberIndex];
@@ -197,11 +222,23 @@ export function useChoiceContextMenu(nodeData: NodeData): MenuContributor {
           MappingActionService.applyTargetSelection(nodeData as TargetNodeData, candidateField);
         }
       }
+    },
+    [isTargetSide, mappingTree.namespaceMap, nodeData],
+  );
 
+  const applyChoiceSelection = useCallback(
+    (wrapper: IField, selection: MemberSelection) => {
+      if (isTargetSide && wrapper.maxOccurs !== 1) {
+        applyUnboundedChoiceSelection(wrapper, selection);
+      } else {
+        applySingleChoiceSelection(wrapper, selection);
+      }
+
+      const doc = wrapper.ownerDocument;
       const previousRefId = doc.getReferenceId(mappingTree.namespaceMap);
       updateDocument(doc, doc.definition, previousRefId);
     },
-    [isTargetSide, mappingTree.namespaceMap, nodeData, updateDocument],
+    [applySingleChoiceSelection, applyUnboundedChoiceSelection, isTargetSide, mappingTree.namespaceMap, updateDocument],
   );
 
   const clearDescendantSelections = useCallback(
