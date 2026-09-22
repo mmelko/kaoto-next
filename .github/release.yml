@@ -1,0 +1,55 @@
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - wontfix
+      - on hold
+      - stale
+      - WIP
+      - release
+  categories:
+    - title: '✨ New Features'
+      labels:
+        - enhancement
+        - functionality
+    - title: '🐛 Bug Fixes'
+      labels:
+        - bug
+    - title: '🗺️ DataMapper'
+      labels:
+        - DataMapper
+    - title: '🎨 UI / UX'
+      labels:
+        - ui/ux
+        - user interface
+    - title: '🧩 VS Code Extension'
+      labels:
+        - VS Code
+    - title: '🍋 Citrus'
+      labels:
+        - Citrus
+    - title: '📖 Documentation'
+      labels:
+        - documentation
+    - title: '🔩 Canvas & Visualization'
+      labels:
+        - canvas/visualization
+        - canvas/config-form
+    - title: '📦 Catalog'
+      labels:
+        - catalog
+    - title: '🧪 Tests'
+      labels:
+        - testing
+        - e2e
+    - title: '🔧 Maintenance & CI'
+      labels:
+        - build
+        - refactoring
+    - title: '📦 Dependencies'
+      labels:
+        - dependencies
+        - renovate
+    - title: '🔀 Other Changes'
+      labels:
+        - '*'

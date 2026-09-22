@@ -15,6 +15,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { env } from 'node:process';
 
 // ---------------------------------------------------------------------------
 // Package bucket definitions
@@ -114,6 +115,56 @@ function runGit(args) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve GitHub usernames for a list of commit SHAs.
+ * Uses GET /repos/{owner}/{repo}/commits/{sha} — one request per unique SHA.
+ * Falls back gracefully when GH_TOKEN is absent (e.g. local runs).
+ *
+ * @param {string[]} shas
+ * @returns {Promise<Set<string>>} GitHub @usernames (without the @ prefix)
+ */
+async function resolveContributors(shas) {
+  const token = env.GH_TOKEN ?? env.GITHUB_TOKEN;
+  if (!token) {
+    console.error('Warning: GH_TOKEN not set — contributors section will be skipped.');
+    return new Set();
+  }
+
+  // Derive repo from git remote URL (works for both https and ssh remotes)
+  const remoteUrl = runGit(['remote', 'get-url', 'origin']) ?? '';
+  const repoMatch = remoteUrl.match(/[:/]([^/:]+\/[^/.]+?)(\.git)?$/);
+  if (!repoMatch) {
+    console.error('Warning: Could not determine repo from remote URL — contributors section will be skipped.');
+    return new Set();
+  }
+  const repo = repoMatch[1];
+
+  const logins = new Set();
+  const BOT_PATTERN = /\[bot\]$/i;
+
+  for (const sha of shas) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repo}/commits/${sha}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const login = data?.author?.login;
+      if (login && !BOT_PATTERN.test(login)) {
+        logins.add(login);
+      }
+    } catch {
+      // network error — skip this commit
+    }
+  }
+
+  return logins;
 }
 
 /**
@@ -223,11 +274,16 @@ const rawCommits = logOutput
 /** @type {Map<string, Map<string, string[]>>} */
 const sections = new Map(PACKAGES.map((p) => [p.name, new Map()]));
 
+/** @type {string[]} */
+const allShas = [];
+
 for (const raw of rawCommits) {
   const [hash, subject, ...bodyParts] = raw.split('\t');
   const body = bodyParts.join('\n');
 
   if (!hash || !subject) continue;
+
+  allShas.push(hash);
 
   const hasBreakingFooter = /^BREAKING[- ]CHANGE:\s+/m.test(body);
   const match = CC_RE.exec(subject);
@@ -287,6 +343,16 @@ for (const pkg of PACKAGES) {
   }
 
   outputParts.push(sectionLines.join('\n'));
+}
+
+// ---------------------------------------------------------------------------
+// Contributors (GitHub usernames via API)
+// ---------------------------------------------------------------------------
+
+const contributors = [...(await resolveContributors(allShas))].sort((a, b) => a.localeCompare(b));
+
+if (contributors.length > 0) {
+  outputParts.push(`## 🙏 Contributors\n\n${contributors.map((a) => `- @${a}`).join('\n')}\n`);
 }
 
 if (outputParts.length === 0) {
