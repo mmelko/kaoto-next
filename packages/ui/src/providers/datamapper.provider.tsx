@@ -13,7 +13,7 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 */
-import { Alert, AlertActionCloseButton, AlertGroup } from '@patternfly/react-core';
+import { Alert, AlertActionCloseButton, AlertGroup, AlertVariant } from '@patternfly/react-core';
 import { cloneDeep } from 'lodash';
 import {
   createContext,
@@ -28,7 +28,13 @@ import {
 } from 'react';
 
 import { Loading } from '../components/Loading';
-import { DEFAULT_DATAMAPPER_SETTINGS, IDataMapperSettings, IStepSettings, SendAlertProps } from '../models/datamapper';
+import {
+  DEFAULT_DATAMAPPER_SETTINGS,
+  IDataMapperSettings,
+  IStepSettings,
+  IStepSettingsResult,
+  SendAlertProps,
+} from '../models/datamapper';
 import {
   BODY_DOCUMENT_ID,
   DocumentDefinition,
@@ -100,12 +106,37 @@ export interface IDataMapperContext {
 export const DataMapperContext = createContext<IDataMapperContext | null>(null);
 
 /**
- * Step settings the host (the Camel model) ended up with after handling an update. The provider applies it to its
- * own settings state, so the settings UI shows what the model really contains, e.g. a validation toggle that could
- * not be honoured, or a validator step that was added/removed automatically after a target schema change.
+ * What the host (the Camel model) reports after handling an update: the step settings it ended up with and the
+ * problems the user should see. The provider applies `settings` to its own settings state, so the settings UI shows
+ * what the model really contains, e.g. a validation toggle that could not be honoured, or a validator step that was
+ * added/removed automatically after a target schema change, and turns `warnings` and `error` into alerts.
  * Applying a patch never calls `onUpdateStepSettings` again.
  */
-type StepSettingsPatch = Partial<IStepSettings> | undefined;
+type StepSettingsPatch = IStepSettingsResult | undefined;
+
+const createStepSettingsAlert = (variant: AlertVariant, title: string, description: string): SendAlertProps => ({
+  variant,
+  title,
+  description,
+  // Alerts are rendered by key: a stable key keeps one toast's timeout and dismissal from moving to another toast.
+  key: `${variant}|${title}|${description}`,
+});
+
+const getStepSettingsAlerts = ({ warnings, error }: IStepSettingsResult): SendAlertProps[] => [
+  ...warnings.map((warning) => createStepSettingsAlert(AlertVariant.warning, 'DataMapper step warning', warning)),
+  ...(error ? [createStepSettingsAlert(AlertVariant.danger, 'Could not update the DataMapper step', error)] : []),
+];
+
+/** Appends the alerts that are not displayed yet (same `key`). Pure, so it can run inside a state updater. */
+const appendNewAlerts = (shown: SendAlertProps[], added: SendAlertProps[]): SendAlertProps[] => {
+  const keys = new Set(shown.map((alert) => alert.key));
+  const fresh = added.filter((alert) => {
+    if (keys.has(alert.key)) return false;
+    keys.add(alert.key);
+    return true;
+  });
+  return fresh.length === 0 ? shown : [...shown, ...fresh];
+};
 
 type DataMapperProviderProps = PropsWithChildren & {
   documentInitializationModel?: DocumentInitializationModel;
@@ -196,6 +227,7 @@ export const DataMapperProvider: FunctionComponent<DataMapperProviderProps> = ({
   const [initialState] = useState(() => createInitialState(documentInitializationModel, initialXsltFile));
   const [debug, setDebug] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [alerts, setAlerts] = useState<SendAlertProps[]>(initialState.alerts);
   const [activeView, setActiveView] = useState<CanvasView>(CanvasView.SOURCE_TARGET);
   const [dataMapperSettings, setDataMapperSettings] = useState<IDataMapperSettings>({
     ...initialState.dataMapperSettings,
@@ -215,8 +247,9 @@ export const DataMapperProvider: FunctionComponent<DataMapperProviderProps> = ({
   }, []);
 
   /**
-   * Applies the settings the host reports back (see {@link StepSettingsPatch}). Does nothing when the patch
-   * does not change the current settings. Never calls `onUpdateStepSettings`, so it can not loop.
+   * Applies what the host reports back (see {@link StepSettingsPatch}): the settings, when they differ from the
+   * current ones, and the warnings and the error as alerts. An alert that is still displayed is not added again.
+   * Never calls `onUpdateStepSettings`, so it can not loop. A rejected update is shown as an alert as well.
    * @param hostResult What the host returned for the update
    * @param onRejected Called when the host rejected the update, e.g. to undo an optimistic settings change
    */
@@ -226,11 +259,20 @@ export const DataMapperProvider: FunctionComponent<DataMapperProviderProps> = ({
         .then((patch) => {
           if (!patch) return;
           const current = dataMapperSettingsRef.current;
-          const next = DataMapperSettingsService.applyPatch(current, patch);
+          const next = DataMapperSettingsService.applyPatch(current, patch.settings);
           if (next !== current) applyDataMapperSettings(next);
+          // Not part of the branch above: a result that only carries a warning leaves the settings unchanged.
+          const added = getStepSettingsAlerts(patch);
+          if (added.length > 0) setAlerts((shown) => appendNewAlerts(shown, added));
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           console.warn('[DataMapperProvider] Failed to update the step settings:', error);
+          const description = error instanceof Error ? error.message : String(error);
+          setAlerts((shown) =>
+            appendNewAlerts(shown, [
+              createStepSettingsAlert(AlertVariant.danger, 'Could not save the change', description),
+            ]),
+          );
           onRejected?.();
         });
     },
@@ -271,8 +313,6 @@ export const DataMapperProvider: FunctionComponent<DataMapperProviderProps> = ({
     setMappingTree(tree);
     if (options?.structural) setStructuralMappingTree(tree);
   }, []);
-
-  const [alerts, setAlerts] = useState<SendAlertProps[]>(initialState.alerts);
 
   // Notify the host before child effects can publish subsequent mapping edits.
   useLayoutEffect(() => {

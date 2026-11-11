@@ -21,6 +21,8 @@ import { DocumentDefinitionType } from '../../models/datamapper/document';
 import { IDataMapperMetadata } from '../../models/datamapper/metadata';
 import { EntitiesContext, EntitiesContextResult, IMetadataApi, MetadataProvider } from '../../providers';
 import { DataMapperMetadataService } from '../../services/datamapper-metadata.service';
+import { DataMapperOutputValidationService } from '../../services/datamapper-output-validation.service';
+import { DataMapperStepSettingsService } from '../../services/datamapper-step-settings.service';
 import { DataMapperValidationStepService } from '../../services/datamapper-validation-step.service';
 import { GENERATED_WRAPPER_MARKER } from '../../services/document/xml-schema/xml-schema-wrapper-generator.service';
 import { EMPTY_XSL } from '../../services/mapping/mapping-serializer.service';
@@ -300,5 +302,35 @@ describe('DataMapper sync — onUpdateDocument validation step synchronization',
       // isValidationEnabled should be called again after sync to refresh state
       expect(isValidationEnabledSpy.mock.calls.length).toBeGreaterThan(callCountBefore);
     });
+  });
+
+  it('8. the host passes the target change to the step settings service and shows what it reports', async () => {
+    const settingsSyncSpy = vi.spyOn(DataMapperStepSettingsService, 'syncOnTargetChange').mockResolvedValue({
+      settings: { isOutputValidationEnabled: true },
+      warnings: ['Schema file(s) missing or empty, not included in validation: Missing.xsd'],
+    });
+    const validationSyncSpy = vi.spyOn(DataMapperOutputValidationService, 'syncOnTargetChange');
+    const setValidationSpy = vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation');
+
+    renderDataMapper(vizNodeWithValidator);
+    await screen.findByTestId('source-parameters-header');
+
+    await attachTargetSchema(['NewOrder.xsd']);
+
+    await waitFor(() => {
+      expect(settingsSyncSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        vizNodeWithValidator,
+        mockEntitiesContext,
+        expect.objectContaining({ xsltPath: 'kaoto-datamapper-1234.xsl' }),
+        expect.objectContaining({ definitionType: DocumentDefinitionType.XML_SCHEMA }),
+      );
+    });
+    expect(
+      await screen.findByText('Schema file(s) missing or empty, not included in validation: Missing.xsd'),
+    ).toBeInTheDocument();
+    // The host knows the step settings service only, not the validation
+    expect(validationSyncSpy).not.toHaveBeenCalled();
+    expect(setValidationSpy).not.toHaveBeenCalled();
   });
 });

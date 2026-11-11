@@ -25,8 +25,32 @@ import {
  * by someone else in between is not detected.
  *
  * No wrapper is written for a step that can not get a validator (no XSLT step), so no orphan wrapper is left behind.
+ *
+ * The two entry points of one step run one after the other, in the order they were called: a target change can not
+ * write a wrapper after a toggle-off deleted it, and a second Save can not read the model before the first finished.
  */
 export class DataMapperOutputValidationService {
+  /** The last queued operation of each step, by metadata id. Its rejection is absorbed; entries do not outlive it. */
+  private static readonly queues = new Map<string, Promise<unknown>>();
+
+  /**
+   * Runs `task` after every operation queued before it for the same step settled, whether it resolved or rejected.
+   * The caller gets the real result or error of its own task.
+   */
+  private static runExclusive<T>(metadataId: string, task: () => Promise<T>): Promise<T> {
+    const queues = DataMapperOutputValidationService.queues;
+    const result = (queues.get(metadataId) ?? Promise.resolve()).then(task);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    queues.set(metadataId, tail);
+    void tail.then(() => {
+      if (queues.get(metadataId) === tail) queues.delete(metadataId);
+    });
+    return result;
+  }
+
   /**
    * Resolves the resource the validator step has to point to for the given target body.
    * With several unconnected XML schema files a wrapper schema is generated and persisted next to the XSLT file.
@@ -136,15 +160,44 @@ export class DataMapperOutputValidationService {
    * @param vizNode The DataMapper step
    * @param enabled Whether the validator step should exist afterwards
    * @param entitiesContext The entities context
+   * @param skipIfUnchanged Do nothing, and read nothing, when the step already is in the requested state. Without
+   *        it a disable of a step without validator still removes a stale generated wrapper; enabling an already
+   *        enabled step is skipped for every caller. The state is read when the call runs, after the earlier calls
+   *        for the step finished, not when it was made.
    * @returns The problems found while resolving the schema to validate against (e.g. validating against a part of
    *          the schema files only), empty when there are none
    */
-  static async setOutputValidation(
+  static setOutputValidation(
     api: IMetadataApi,
     vizNode: IVisualizationNode,
     enabled: boolean,
     entitiesContext: EntitiesContextResult,
+    skipIfUnchanged = false,
   ): Promise<string[]> {
+    const metadataId = DataMapperStepService.getDataMapperMetadataId(vizNode);
+    return DataMapperOutputValidationService.runExclusive(metadataId, () =>
+      DataMapperOutputValidationService.applySetOutputValidation(
+        api,
+        vizNode,
+        enabled,
+        entitiesContext,
+        skipIfUnchanged,
+      ),
+    );
+  }
+
+  private static async applySetOutputValidation(
+    api: IMetadataApi,
+    vizNode: IVisualizationNode,
+    enabled: boolean,
+    entitiesContext: EntitiesContextResult,
+    skipIfUnchanged: boolean,
+  ): Promise<string[]> {
+    // Enabling an enabled step changes nothing. A disable also removes a stale wrapper, so it is skipped only when
+    // the caller asked for it.
+    const isEnabled = DataMapperValidationStepService.isValidationEnabled(vizNode);
+    if (isEnabled === enabled && (enabled || skipIfUnchanged)) return [];
+
     const metadataId = DataMapperStepService.getDataMapperMetadataId(vizNode);
     const metadata = await api.getMetadata<IDataMapperMetadata>(metadataId);
 
@@ -189,14 +242,41 @@ export class DataMapperOutputValidationService {
    * @param entitiesContext The entities context
    * @param metadata The DataMapper metadata, already updated with the new target body
    * @param definition The new target body definition (the source of the schema file content)
+   * @param reportedWarnings Optional list the problems found while resolving the schema are appended to, so the
+   *        caller can show them to the user
    * @returns Whether validation is enabled afterwards
    */
-  static async syncOnTargetChange(
+  static syncOnTargetChange(
     api: IMetadataApi,
     vizNode: IVisualizationNode,
     entitiesContext: EntitiesContextResult,
     metadata: IDataMapperMetadata,
     definition: DocumentDefinition,
+    reportedWarnings?: string[],
+  ): Promise<boolean> {
+    const metadataId = DataMapperStepService.getDataMapperMetadataId(vizNode);
+    // The host reassigns `targetBody` on its metadata object for every target change. A queued run must keep the
+    // `targetBody` that belongs to the `definition` it was called with.
+    const snapshot = { ...metadata };
+    return DataMapperOutputValidationService.runExclusive(metadataId, () =>
+      DataMapperOutputValidationService.applySyncOnTargetChange(
+        api,
+        vizNode,
+        entitiesContext,
+        snapshot,
+        definition,
+        reportedWarnings,
+      ),
+    );
+  }
+
+  private static async applySyncOnTargetChange(
+    api: IMetadataApi,
+    vizNode: IVisualizationNode,
+    entitiesContext: EntitiesContextResult,
+    metadata: IDataMapperMetadata,
+    definition: DocumentDefinition,
+    reportedWarnings?: string[],
   ): Promise<boolean> {
     if (!DataMapperValidationStepService.isValidationEnabled(vizNode)) {
       return false;
@@ -214,6 +294,7 @@ export class DataMapperOutputValidationService {
         targetBody,
         xsltPath,
         definitionFiles,
+        reportedWarnings,
       );
       DataMapperValidationStepService.updateValidationStep(vizNode, targetBody, entitiesContext, resourceUri);
     }

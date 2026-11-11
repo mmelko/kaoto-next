@@ -1793,7 +1793,9 @@ describe('DataMapperProvider', () => {
     } as IDocument;
 
     it('should apply the patch returned by onUpdateDocument', async () => {
-      const onUpdateDocument = vi.fn().mockResolvedValue({ isOutputValidationEnabled: true });
+      const onUpdateDocument = vi
+        .fn()
+        .mockResolvedValue({ settings: { isOutputValidationEnabled: true }, warnings: [] });
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <DataMapperProvider onUpdateDocument={onUpdateDocument}>{children}</DataMapperProvider>
       );
@@ -1809,7 +1811,9 @@ describe('DataMapperProvider', () => {
     });
 
     it('should apply the patch returned by onUpdateStepSettings without calling it again', async () => {
-      const onUpdateStepSettings = vi.fn().mockResolvedValue({ isOutputValidationEnabled: false });
+      const onUpdateStepSettings = vi
+        .fn()
+        .mockResolvedValue({ settings: { isOutputValidationEnabled: false }, warnings: [] });
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <DataMapperProvider
           initialStepSettings={{ isOutputValidationEnabled: true }}
@@ -1908,7 +1912,9 @@ describe('DataMapperProvider', () => {
     });
 
     it('should keep the settings reference when the patch equals the current value', async () => {
-      const onUpdateDocument = vi.fn().mockResolvedValue({ isOutputValidationEnabled: false });
+      const onUpdateDocument = vi
+        .fn()
+        .mockResolvedValue({ settings: { isOutputValidationEnabled: false }, warnings: [] });
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <DataMapperProvider onUpdateDocument={onUpdateDocument}>{children}</DataMapperProvider>
       );
@@ -1944,6 +1950,167 @@ describe('DataMapperProvider', () => {
         expect(warn).toHaveBeenCalled();
       });
       warn.mockRestore();
+    });
+
+    describe('alerts', () => {
+      const renderWithHost = (onUpdateDocument: Mock) => {
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+          <DataMapperProvider onUpdateDocument={onUpdateDocument}>{children}</DataMapperProvider>
+        );
+        const rendered = renderHook(() => useDataMapper(), { wrapper });
+        const update = async () => {
+          const calls = onUpdateDocument.mock.calls.length;
+          act(() => {
+            rendered.result.current.updateDocument(mockDocument, docDef, 'Body');
+          });
+          await waitFor(() => {
+            expect(onUpdateDocument).toHaveBeenCalledTimes(calls + 1);
+          });
+          await act(async () => {
+            await Promise.resolve();
+          });
+        };
+        return { ...rendered, update };
+      };
+
+      beforeEach(() => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('should show a warning as a warning alert with a stable key', async () => {
+        const onUpdateDocument = vi.fn().mockResolvedValue({
+          settings: { isOutputValidationEnabled: false },
+          warnings: ['Schema file(s) missing'],
+        });
+        const { result, update } = renderWithHost(onUpdateDocument);
+
+        await update();
+
+        expect(result.current.alerts).toEqual([
+          expect.objectContaining({
+            variant: 'warning',
+            title: 'DataMapper step warning',
+            description: 'Schema file(s) missing',
+            key: expect.any(String),
+          }),
+        ]);
+      });
+
+      it('should show an error as a danger alert', async () => {
+        const onUpdateDocument = vi
+          .fn()
+          .mockResolvedValue({ settings: {}, warnings: [], error: 'Could not update output validation: boom' });
+        const { result, update } = renderWithHost(onUpdateDocument);
+
+        await update();
+
+        expect(result.current.alerts).toEqual([
+          expect.objectContaining({
+            variant: 'danger',
+            title: 'Could not update the DataMapper step',
+            description: 'Could not update output validation: boom',
+          }),
+        ]);
+      });
+
+      it('should show a warning of a result whose settings equal the current ones', async () => {
+        const onUpdateDocument = vi
+          .fn()
+          .mockResolvedValue({ settings: { isOutputValidationEnabled: false }, warnings: ['standing warning'] });
+        const { result, update } = renderWithHost(onUpdateDocument);
+        const before = result.current.dataMapperSettings;
+
+        await update();
+
+        expect(result.current.dataMapperSettings).toBe(before);
+        expect(result.current.alerts).toHaveLength(1);
+      });
+
+      it('should not add an alert that is still displayed again, but a different one', async () => {
+        const onUpdateDocument = vi.fn().mockResolvedValue({ settings: {}, warnings: ['same'] });
+        const { result, update } = renderWithHost(onUpdateDocument);
+
+        await update();
+        await update();
+        expect(result.current.alerts).toHaveLength(1);
+
+        onUpdateDocument.mockResolvedValue({ settings: {}, warnings: ['same', 'other'] });
+        await update();
+
+        expect(result.current.alerts.map((alert) => alert.description)).toEqual(['same', 'other']);
+        const keys = result.current.alerts.map((alert) => alert.key);
+        expect(new Set(keys).size).toBe(2);
+      });
+
+      it('should give every alert its own key, built from its content', async () => {
+        const onUpdateDocument = vi.fn().mockResolvedValue({ settings: {}, warnings: ['first', 'second'] });
+        const { result, update } = renderWithHost(onUpdateDocument);
+        await update();
+        const [first, second] = result.current.alerts;
+
+        // Alerts are rendered by key: the key must not depend on the position in the list
+        expect(first.key).not.toBe(second.key);
+        expect(second.key).toContain('second');
+      });
+
+      it('should show a rejected onUpdateDocument as a danger alert', async () => {
+        const onUpdateDocument = vi.fn().mockRejectedValue(new Error('boom'));
+        const { result } = renderWithHost(onUpdateDocument);
+
+        act(() => {
+          result.current.updateDocument(mockDocument, docDef, 'Body');
+        });
+
+        await waitFor(() => {
+          expect(result.current.alerts).toEqual([
+            expect.objectContaining({ variant: 'danger', title: 'Could not save the change', description: 'boom' }),
+          ]);
+        });
+      });
+
+      it('should show a rejection that is not an Error by its text', async () => {
+        const onUpdateDocument = vi.fn().mockRejectedValue('plain text');
+        const { result } = renderWithHost(onUpdateDocument);
+
+        act(() => {
+          result.current.updateDocument(mockDocument, docDef, 'Body');
+        });
+
+        await waitFor(() => {
+          expect(result.current.alerts).toEqual([
+            expect.objectContaining({ variant: 'danger', description: 'plain text' }),
+          ]);
+        });
+      });
+
+      it('should show a rejected onUpdateStepSettings as a danger alert and still roll back', async () => {
+        const onUpdateStepSettings = vi.fn().mockRejectedValue(new Error('rejected'));
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+          <DataMapperProvider
+            initialStepSettings={{ isOutputValidationEnabled: false }}
+            onUpdateStepSettings={onUpdateStepSettings}
+          >
+            {children}
+          </DataMapperProvider>
+        );
+        const { result } = renderHook(() => useDataMapper(), { wrapper });
+        const before = result.current.dataMapperSettings;
+
+        act(() => {
+          result.current.updateDataMapperSettings({ isOutputValidationEnabled: true });
+        });
+
+        await waitFor(() => {
+          expect(result.current.alerts).toEqual([
+            expect.objectContaining({ variant: 'danger', description: 'rejected' }),
+          ]);
+        });
+        expect(result.current.dataMapperSettings).toBe(before);
+      });
     });
   });
 

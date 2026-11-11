@@ -228,24 +228,29 @@ export class DataMapperStepService {
     }
   }
 
-  /**
-   * The XSLT file entry of a rename map: the file that is not a schema (the wrapper and its aggregators are `.xsd`).
-   */
-  private static findXsltRename(renames: Record<string, string>): [oldPath: string, newPath: string] | undefined {
-    return Object.entries(renames).find(([oldPath]) => !oldPath.endsWith('.xsd'));
+  /** The XSLT file name the step group currently points to. */
+  private static getCurrentXsltFileName(definition: Step): string | undefined {
+    return DataMapperStepService.getXsltFileName(definition.steps?.find(isXSLTComponent));
   }
 
   /**
    * Applies the files a DataMapper step owns having moved (rename, duplicate, paste) to a step definition: the XSLT
-   * step points to its new file and the validator follows its generated wrapper schema.
+   * step follows the entry of the map that is keyed by its XSLT file name, and the validator follows its generated
+   * wrapper schema. Which files are generated is not decided here, the map says what moved.
    * The definition is only changed in memory, the caller persists it.
    * @param definition The DataMapper step group definition
    * @param renames The old to new path of every file that moved, see `DataMapperMetadataService`
+   * @param xsltFileName The XSLT file name the map is keyed by, when the definition does not carry it (default: the
+   * file name the definition currently points to)
    */
-  static applyResourceRenames(definition: Step, renames: Record<string, string>): void {
-    const xsltRename = DataMapperStepService.findXsltRename(renames);
-    if (xsltRename) {
-      DataMapperStepService.setXsltFileName(definition, xsltRename[1]);
+  static applyResourceRenames(
+    definition: Step,
+    renames: Record<string, string>,
+    xsltFileName = DataMapperStepService.getCurrentXsltFileName(definition),
+  ): void {
+    const newXsltFileName = xsltFileName ? renames[xsltFileName] : undefined;
+    if (newXsltFileName) {
+      DataMapperStepService.setXsltFileName(definition, newXsltFileName);
     }
     for (const [oldPath, newPath] of Object.entries(renames)) {
       DataMapperValidationStepService.retargetValidationResource(definition, oldPath, newPath);
@@ -275,12 +280,19 @@ export class DataMapperStepService {
    * its own: it must not validate against (or lose) a file that belongs to the original step.
    * @param definition The step group definition of the copy
    * @param renames The old to new path of every file that was copied
+   * @param originalXsltPath The XSLT file the original step has now, i.e. the key of `renames`. A pasted definition
+   * comes from the clipboard and can predate a rename of the original, so it may still carry the old file name; in
+   * that case its validator is detached by that old name as well. Default: the file the definition points to
    */
-  static applyCopiedResources(definition: Step, renames: Record<string, string>): void {
-    DataMapperStepService.applyResourceRenames(definition, renames);
-    const xsltRename = DataMapperStepService.findXsltRename(renames);
-    if (xsltRename) {
-      DataMapperValidationStepService.removeWrapperValidation(definition, xsltRename[0]);
+  static applyCopiedResources(definition: Step, renames: Record<string, string>, originalXsltPath?: string): void {
+    const copiedXsltPath = DataMapperStepService.getCurrentXsltFileName(definition);
+    const sourceXsltPath = originalXsltPath ?? copiedXsltPath;
+    DataMapperStepService.applyResourceRenames(definition, renames, sourceXsltPath);
+    if (!sourceXsltPath || !(sourceXsltPath in renames)) return;
+
+    DataMapperStepService.detachOriginalResources(definition, sourceXsltPath);
+    if (copiedXsltPath && copiedXsltPath !== sourceXsltPath) {
+      DataMapperStepService.detachOriginalResources(definition, copiedXsltPath);
     }
   }
 
@@ -290,12 +302,22 @@ export class DataMapperStepService {
    * @param definition The step group definition of the copy
    */
   static clearResources(definition: Step): void {
-    const xsltStep = definition.steps?.find(isXSLTComponent);
-    const originalXsltPath = DataMapperStepService.getXsltFileName(xsltStep);
+    const originalXsltPath = DataMapperStepService.getCurrentXsltFileName(definition);
     if (originalXsltPath) {
-      DataMapperValidationStepService.removeWrapperValidation(definition, originalXsltPath);
+      DataMapperStepService.detachOriginalResources(definition, originalXsltPath);
     }
     DataMapperStepService.setXsltFileName(definition, '');
+  }
+
+  /**
+   * Drops the references a copy of a DataMapper step must not keep to the files of the original (today: the
+   * validator that points to the original's generated wrapper schema). The only place of this service that knows
+   * which references those are.
+   * @param definition The step group definition of the copy
+   * @param originalXsltPath The XSLT file name of the original, which names its generated files
+   */
+  private static detachOriginalResources(definition: Step, originalXsltPath: string): void {
+    DataMapperValidationStepService.removeWrapperValidation(definition, originalXsltPath);
   }
 
   /**

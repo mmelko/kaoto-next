@@ -127,7 +127,7 @@ describe('onPasteDataMapper', () => {
       name: originalStepId,
       definition: {
         id: originalStepId,
-        steps: [{ to: { uri: 'xslt-saxon:original.xsl' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalStepId}.xsl` } }],
       },
     };
 
@@ -135,7 +135,7 @@ describe('onPasteDataMapper', () => {
       name: newStepId,
       definition: {
         id: newStepId,
-        steps: [{ to: { uri: 'xslt-saxon:new.xsl' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalStepId}.xsl` } }],
       },
     };
 
@@ -208,7 +208,7 @@ describe('onPasteDataMapper', () => {
       name: originalStepId,
       definition: {
         id: originalStepId,
-        steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalStepId}.xsl` } }],
       },
     };
 
@@ -216,7 +216,7 @@ describe('onPasteDataMapper', () => {
       name: newStepId,
       definition: {
         id: newStepId,
-        steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalStepId}.xsl` } }],
       },
     };
 
@@ -264,13 +264,13 @@ describe('onPasteDataMapper', () => {
             {
               step: {
                 id: 'kaoto-datamapper-original-id-1',
-                steps: [{ to: { uri: 'xslt-saxon:test1.xsl' } }],
+                steps: [{ to: { uri: 'xslt-saxon:kaoto-datamapper-original-id-1.xsl' } }],
               },
             },
             {
               step: {
                 id: 'kaoto-datamapper-original-id-2',
-                steps: [{ to: { uri: 'xslt-saxon:test2.xsl' } }],
+                steps: [{ to: { uri: 'xslt-saxon:kaoto-datamapper-original-id-2.xsl' } }],
               },
             },
           ],
@@ -286,13 +286,13 @@ describe('onPasteDataMapper', () => {
             {
               step: {
                 id: 'kaoto-datamapper-new-id-1',
-                steps: [{ to: { uri: 'xslt-saxon:test1.xsl' } }],
+                steps: [{ to: { uri: 'xslt-saxon:kaoto-datamapper-original-id-1.xsl' } }],
               },
             },
             {
               step: {
                 id: 'kaoto-datamapper-new-id-2',
-                steps: [{ to: { uri: 'xslt-saxon:test2.xsl' } }],
+                steps: [{ to: { uri: 'xslt-saxon:kaoto-datamapper-original-id-2.xsl' } }],
               },
             },
           ],
@@ -343,11 +343,12 @@ describe('onPasteDataMapper', () => {
     const originalWrapper = `${originalStepId}-validation-wrapper.xsd`;
     const newWrapper = `${newStepId}-validation-wrapper.xsd`;
 
+    // A pasted copy still carries the XSLT file of the original step.
     const stepContent = (id: string, validatorUri: string): IClipboardContent => ({
       name: id,
       definition: {
         id,
-        steps: [{ to: { uri: `${XSLT_COMPONENT_NAME}:${id}.xsl` } }, { to: { uri: validatorUri } }],
+        steps: [{ to: { uri: `${XSLT_COMPONENT_NAME}:${originalStepId}.xsl` } }, { to: { uri: validatorUri } }],
       },
     });
 
@@ -411,6 +412,27 @@ describe('onPasteDataMapper', () => {
       });
 
       expect(mockApi.saveResourceContent).not.toHaveBeenCalledWith(newWrapper, expect.anything());
+      expect(validatorUriOf(updatedContent)).toBeUndefined();
+    });
+
+    it('should repoint the XSLT step and drop the stale validator when the original was renamed after the copy', async () => {
+      const renamedMetadata = { ...originalMetadata, xsltPath: 'renamed.xsl' };
+      const renamedWrapper = 'renamed-validation-wrapper.xsd';
+      mockApi.getMetadata.mockResolvedValue(renamedMetadata);
+      const files: Record<string, string> = { 'renamed.xsl': '<xsl/>', [renamedWrapper]: wrapper };
+      mockApi.getResourceContent.mockImplementation((path: string) => Promise.resolve(files[path]));
+      // The clipboard still holds the definition as it was copied, before the rename
+      const updatedContent = stepContent(newStepId, `validator:${originalWrapper}?failOnNullBody=false`);
+
+      await onPasteDataMapper(mockApi, {
+        targetVizNode: mockVizNode,
+        originalContent: stepContent(originalStepId, `validator:${originalWrapper}`),
+        updatedContent,
+      });
+
+      const steps = (updatedContent.definition as { steps: Array<{ to: { uri: string } }> }).steps;
+      expect(steps[0].to.uri).toBe(`${XSLT_COMPONENT_NAME}:${newStepId}.xsl`);
+      expect(mockApi.saveResourceContent).toHaveBeenCalledWith(newWrapper, wrapper);
       expect(validatorUriOf(updatedContent)).toBeUndefined();
     });
 

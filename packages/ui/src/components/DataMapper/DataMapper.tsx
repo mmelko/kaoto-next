@@ -18,7 +18,7 @@ import { FunctionComponent, useCallback, useContext, useEffect, useMemo, useStat
 import { DataMapperControl } from '../../components/DataMapper/DataMapperControl';
 import { Loading } from '../../components/Loading';
 import { IVisualizationNode } from '../../models';
-import { IStepSettings } from '../../models/datamapper';
+import { IStepSettings, IStepSettingsResult } from '../../models/datamapper';
 import { DocumentDefinition, DocumentInitializationModel, DocumentType } from '../../models/datamapper/document';
 import { IDataMapperMetadata } from '../../models/datamapper/metadata';
 import { EntitiesContext, MetadataContext } from '../../providers';
@@ -27,9 +27,8 @@ import { DataMapperProvider } from '../../providers/datamapper.provider';
 import { DataMapperDndProvider } from '../../providers/datamapper-dnd.provider';
 import { SourceTargetDnDHandler } from '../../providers/dnd/SourceTargetDnDHandler';
 import { DataMapperMetadataService } from '../../services/datamapper-metadata.service';
-import { DataMapperOutputValidationService } from '../../services/datamapper-output-validation.service';
 import { DataMapperStepService } from '../../services/datamapper-step.service';
-import { DataMapperValidationStepService } from '../../services/datamapper-validation-step.service';
+import { DataMapperStepSettingsService } from '../../services/datamapper-step-settings.service';
 import { EMPTY_XSL } from '../../services/mapping/mapping-serializer.service';
 
 export interface IDataMapperProps {
@@ -67,10 +66,7 @@ export const DataMapper: FunctionComponent<IDataMapperProps> = ({ vizNode }) => 
       setDocumentInitializationModel(initModel);
       const mappingFile = await DataMapperMetadataService.loadMappingFile(ctx, meta);
       setInitialXsltFile(mappingFile);
-      setInitialStepSettings({
-        outputVariable: DataMapperStepService.getOutputVariable(vizNode),
-        isOutputValidationEnabled: DataMapperValidationStepService.isValidationEnabled(vizNode),
-      });
+      setInitialStepSettings(DataMapperStepSettingsService.getStepSettings(vizNode));
     };
     void initialize().then(() => {
       setIsLoading(false);
@@ -79,34 +75,15 @@ export const DataMapper: FunctionComponent<IDataMapperProps> = ({ vizNode }) => 
   }, []);
 
   const onUpdateStepSettings = useCallback(
-    async (settings: IStepSettings): Promise<Partial<IStepSettings> | undefined> => {
+    async (settings: IStepSettings): Promise<IStepSettingsResult | undefined> => {
       if (!vizNode || !entitiesContext) return;
-      DataMapperStepService.setOutputVariable(vizNode, settings.outputVariable, entitiesContext);
-      if (
-        metadata &&
-        settings.isOutputValidationEnabled !== DataMapperValidationStepService.isValidationEnabled(vizNode)
-      ) {
-        try {
-          await DataMapperOutputValidationService.setOutputValidation(
-            ctx,
-            vizNode,
-            settings.isOutputValidationEnabled,
-            entitiesContext,
-          );
-        } catch (error) {
-          // The model may already be changed (e.g. the output variable), so report its real state below instead of
-          // letting the provider roll the settings back to a state the model no longer has.
-          console.warn('[DataMapper] Failed to toggle output validation:', error);
-        }
-      }
-      // Report what the model really contains, the toggle may not have been honoured (e.g. nothing to validate).
-      return { isOutputValidationEnabled: DataMapperValidationStepService.isValidationEnabled(vizNode) };
+      return DataMapperStepSettingsService.updateStepSettings(ctx, vizNode, entitiesContext, settings);
     },
-    [ctx, vizNode, entitiesContext, metadata],
+    [ctx, vizNode, entitiesContext],
   );
 
   const onUpdateDocument = useCallback(
-    async (definition: DocumentDefinition): Promise<Partial<IStepSettings> | undefined> => {
+    async (definition: DocumentDefinition): Promise<IStepSettingsResult | undefined> => {
       if (!metadataId || !metadata) return;
       switch (definition.documentType) {
         case DocumentType.SOURCE_BODY:
@@ -118,14 +95,13 @@ export const DataMapper: FunctionComponent<IDataMapperProps> = ({ vizNode }) => 
         case DocumentType.TARGET_BODY: {
           await DataMapperMetadataService.updateTargetBodyMetadata(ctx, metadataId, metadata, definition);
           if (vizNode) {
-            const isOutputValidationEnabled = await DataMapperOutputValidationService.syncOnTargetChange(
+            return DataMapperStepSettingsService.syncOnTargetChange(
               ctx,
               vizNode,
               entitiesContext,
               metadata,
               definition,
             );
-            return { isOutputValidationEnabled };
           }
           break;
         }

@@ -27,9 +27,8 @@ import { EntitiesContext } from '../../providers';
 import { MetadataContext } from '../../providers/metadata.provider';
 import { Links } from '../../router/links.models';
 import { DataMapperMetadataService } from '../../services/datamapper-metadata.service';
-import { DataMapperOutputValidationService } from '../../services/datamapper-output-validation.service';
 import { DataMapperStepService } from '../../services/datamapper-step.service';
-import { DataMapperValidationStepService } from '../../services/datamapper-validation-step.service';
+import { DataMapperStepSettingsService } from '../../services/datamapper-step-settings.service';
 import { isXSLTComponent } from '../../utils';
 import type { XsltComponentDef } from '../../utils/is-xslt-component';
 import { OutputVariableField } from './OutputVariableField';
@@ -56,6 +55,7 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
   const [currentFileName, setCurrentFileName] = useState<string | undefined>(undefined);
   const [isEditingFilename, setIsEditingFilename] = useState<boolean>(false);
   const [isSavingFile, setIsSavingFile] = useState<boolean>(false);
+  const [renameError, setRenameError] = useState<string | undefined>(undefined);
   const [isValidationEnabled, setIsValidationEnabled] = useState<boolean>(false);
   const [isValidationTogglePending, setIsValidationTogglePending] = useState<boolean>(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
@@ -102,7 +102,7 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
       if (!exists) clearValidationMessages();
 
       if (vizNode) {
-        setIsValidationEnabled(DataMapperValidationStepService.isValidationEnabled(vizNode));
+        setIsValidationEnabled(DataMapperStepSettingsService.getStepSettings(vizNode).isOutputValidationEnabled);
         const metadataId = DataMapperStepService.getDataMapperMetadataId(vizNode);
         const isPrimitive = await DataMapperMetadataService.isTargetBodyPrimitive(metadata, metadataId);
         if (cancelled) return;
@@ -155,22 +155,35 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
       }
 
       setIsSavingFile(true);
+      setRenameError(undefined);
       try {
+        // A toggle that is still running could write the wrapper under the old name.
+        if (isValidationTogglePending) {
+          throw new Error('Output validation is being updated, try again in a moment.');
+        }
         const metadataId = DataMapperStepService.getDataMapperMetadataId(vizNode);
-        const renamed = await DataMapperMetadataService.renameXsltFile(metadata, metadataId, newPath);
-        if (renamed) {
-          DataMapperStepService.applyResourceRenamesToNode(vizNode, renamed, entitiesContext);
-          // Only now that the route points to the new files the old ones can go.
-          await DataMapperMetadataService.deleteRenamedFiles(metadata, renamed);
+        await DataMapperMetadataService.renameXsltFile(metadata, metadataId, newPath, (renames) => {
+          DataMapperStepService.applyResourceRenamesToNode(vizNode, renames, entitiesContext);
+          // The route points to the new files from here on, whatever happens to the old ones.
           setCurrentFileName(newPath);
           setXsltFileExists(true);
-        }
+        });
+      } catch (error) {
+        // The input shows its own generic message; this is the reason.
+        setRenameError(error instanceof Error ? error.message : String(error));
+        throw error;
       } finally {
         setIsSavingFile(false);
       }
     },
-    [xsltDocumentName, metadata, entitiesContext, vizNode],
+    [xsltDocumentName, metadata, entitiesContext, vizNode, isValidationTogglePending],
   );
+
+  const handleEditingStateChange = useCallback((isEditing: boolean) => {
+    setIsEditingFilename(isEditing);
+    // A reason belongs to the edit it came from: cancelling the edit removes it.
+    setRenameError(undefined);
+  }, []);
 
   const handleValidationToggle = useCallback(
     async (_event: ChangeEvent<HTMLInputElement>, { checked }: { checked: boolean }) => {
@@ -178,19 +191,18 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
       setIsValidationTogglePending(true);
       setValidationError(undefined);
       try {
-        const warnings = await DataMapperOutputValidationService.setOutputValidation(
-          metadata,
-          vizNode,
-          checked,
-          entitiesContext,
-        );
-        setValidationWarnings(warnings);
+        const result = await DataMapperStepSettingsService.updateStepSettings(metadata, vizNode, entitiesContext, {
+          ...DataMapperStepSettingsService.getStepSettings(vizNode),
+          isOutputValidationEnabled: checked,
+        });
+        setValidationWarnings(result.warnings);
+        setValidationError(result.error);
       } catch (err) {
         console.warn('[DataMapperLauncher] Failed to toggle output validation:', err);
         setValidationWarnings([]);
         setValidationError(`Could not ${checked ? 'enable' : 'disable'} output validation, see the log for details.`);
       } finally {
-        setIsValidationEnabled(DataMapperValidationStepService.isValidationEnabled(vizNode));
+        setIsValidationEnabled(DataMapperStepSettingsService.getStepSettings(vizNode).isOutputValidationEnabled);
         setIsValidationTogglePending(false);
       }
     },
@@ -254,22 +266,34 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
   return (
     <section className="data-mapper-launcher">
       {xsltFileExists && (
-        <FieldWrapper
-          propName="xslt-document"
-          title="Document"
-          description="The name of the XSLT document that is used by the Kaoto DataMapper"
-          defaultValue=""
-        >
-          <XsltDocumentRenameInput
-            value={xsltDocumentName}
-            onChange={handleChange}
-            onEditingStateChange={setIsEditingFilename}
-            validator={validateDocumentName}
-            textTitle="XSLT document name"
-            editTitle="Edit document name"
-            data-testid="xslt-document-name"
-          />
-        </FieldWrapper>
+        <>
+          <FieldWrapper
+            propName="xslt-document"
+            title="Document"
+            description="The name of the XSLT document that is used by the Kaoto DataMapper"
+            defaultValue=""
+          >
+            <XsltDocumentRenameInput
+              value={xsltDocumentName}
+              onChange={handleChange}
+              onEditingStateChange={handleEditingStateChange}
+              validator={validateDocumentName}
+              textTitle="XSLT document name"
+              editTitle="Edit document name"
+              data-testid="xslt-document-name"
+            />
+          </FieldWrapper>
+          {renameError && (
+            <InlineNotification
+              data-testid="xslt-document-rename-error"
+              kind="error"
+              lowContrast
+              hideCloseButton
+              title=""
+              subtitle={renameError}
+            />
+          )}
+        </>
       )}
       {isValidationGroupShown && (
         <FormGroup legendText="Output Validation">
@@ -277,7 +301,7 @@ const DataMapperLauncherContent: FunctionComponent<{ vizNode?: IVisualizationNod
             id="validate-output"
             labelText="Validate output"
             checked={isValidationEnabled}
-            disabled={isChecking || isValidationTogglePending}
+            disabled={isChecking || isValidationTogglePending || isSavingFile}
             onChange={handleValidationToggle}
             data-testid="validate-output-checkbox"
           />

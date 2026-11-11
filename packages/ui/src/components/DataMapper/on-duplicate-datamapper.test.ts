@@ -62,7 +62,7 @@ describe('onDuplicateDataMapper', () => {
       name: 'step',
       definition: {
         id: newStepId,
-        steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } }],
       },
     };
 
@@ -174,7 +174,7 @@ describe('onDuplicateDataMapper', () => {
       definition: {
         id: newStepId,
         steps: [
-          { to: { uri: 'xslt-saxon:test.xsl' } },
+          { to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } },
           { to: { uri: `validator:${originalMetadataId}-validation-wrapper.xsd` } },
         ],
       },
@@ -203,7 +203,7 @@ describe('onDuplicateDataMapper', () => {
       name: 'step',
       definition: {
         id: newStepId,
-        steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }, { to: { uri: 'validator:a.xsd' } }],
+        steps: [{ to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } }, { to: { uri: 'validator:a.xsd' } }],
       },
     };
 
@@ -235,7 +235,7 @@ describe('onDuplicateDataMapper', () => {
       definition: {
         id: newStepId,
         steps: [
-          { to: { uri: 'xslt-saxon:test.xsl' } },
+          { to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } },
           { to: { uri: `validator:${originalMetadataId}-validation-wrapper.xsd?failOnNullBody=false` } },
         ],
       },
@@ -263,7 +263,7 @@ describe('onDuplicateDataMapper', () => {
       definition: {
         id: newStepId,
         steps: [
-          { to: { uri: 'xslt-saxon:test.xsl' } },
+          { to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } },
           { to: { uri: `validator:${originalMetadataId}-validation-wrapper.xsd` } },
         ],
       },
@@ -298,7 +298,10 @@ describe('onDuplicateDataMapper', () => {
       name: 'step',
       definition: {
         id: newStepId,
-        steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }, { to: { uri: `validator:${originalWrapper}` } }],
+        steps: [
+          { to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } },
+          { to: { uri: `validator:${originalWrapper}` } },
+        ],
       },
     };
 
@@ -328,7 +331,10 @@ describe('onDuplicateDataMapper', () => {
 
     await onDuplicateDataMapper(mockApi, {
       sourceVizNode: mockVizNode,
-      content: { name: 'step', definition: { id: newStepId, steps: [{ to: { uri: 'xslt-saxon:test.xsl' } }] } },
+      content: {
+        name: 'step',
+        definition: { id: newStepId, steps: [{ to: { uri: `xslt-saxon:${originalMetadataId}.xsl` } }] },
+      },
     });
 
     expect(warnSpy).not.toHaveBeenCalled();

@@ -14,6 +14,7 @@ import { Links } from '../../router/links.models';
 import { DataMapperMetadataService } from '../../services/datamapper-metadata.service';
 import { DataMapperOutputValidationService } from '../../services/datamapper-output-validation.service';
 import { DataMapperStepService } from '../../services/datamapper-step.service';
+import { DataMapperStepSettingsService } from '../../services/datamapper-step-settings.service';
 import { DataMapperValidationStepService } from '../../services/datamapper-validation-step.service';
 import {
   GENERATED_WRAPPER_MARKER,
@@ -424,7 +425,11 @@ describe('DataMapperLauncher', () => {
         const OLD_VALIDATOR_URI = 'validator:test-document-validation-wrapper.xsd?failOnNullBody=false';
 
         /** Clicks through the rename of `test-document.xsl` to `renamed.xsl`, without waiting for the outcome */
-        const startRename = async (resources: Record<string, string>, overrideMocks?: () => void) => {
+        const startRename = async (
+          resources: Record<string, string>,
+          overrideMocks?: () => void,
+          beforeSave?: () => Promise<void>,
+        ) => {
           const vizNode = createStepVizNode('xslt-saxon:test-document.xsl', OLD_VALIDATOR_URI);
           getXsltFileNameSpy.mockReturnValue('test-document.xsl');
           getDataMapperMetadataIdSpy.mockReturnValue('test-node-id');
@@ -448,8 +453,20 @@ describe('DataMapperLauncher', () => {
           render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
           const input = await focusNameInput();
           fireEvent.change(input, { target: { value: 'renamed.xsl' } });
+          await beforeSave?.();
           fireEvent.click(await screen.findByRole('button', { name: 'Save value' }));
           return vizNode;
+        };
+
+        /** The Validate output checkbox is only shown for a schema target */
+        const useXmlTarget = () => {
+          mockMetadataContext.getMetadata = vi.fn().mockResolvedValue({
+            sourceBody: { type: DocumentDefinitionType.Primitive, filePath: [] },
+            sourceParameters: {},
+            targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: ['ShipOrder.xsd'] },
+            xsltPath: 'test-document.xsl',
+            namespaceMap: {},
+          });
         };
 
         const renameWith = async (resources: Record<string, string>) => {
@@ -499,23 +516,93 @@ describe('DataMapperLauncher', () => {
           expect(mockMetadataContext.saveResourceContent).toHaveBeenCalledWith('renamed.xsl', 'mock xslt content');
         });
 
-        it('should keep the old wrapper when copying it failed', async () => {
+        it('should not rename, remove the copies and tell the user when copying the wrapper failed', async () => {
           vi.spyOn(DataMapperMetadataService, 'duplicateValidationWrapper').mockResolvedValue({
             renames: {},
             failure: 'boom',
           });
-          const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-          await renameWith({
+          const vizNode = await startRename({
             'test-document.xsl': 'mock xslt content',
             'test-document-validation-wrapper.xsd': WRAPPER_CONTENT,
           });
 
+          expect(await screen.findByTestId('xslt-document-rename-error')).toHaveTextContent(
+            'Could not copy the validation wrapper of "test-document.xsl", the document was not renamed: boom',
+          );
+          expect(vizNode.updateModel).not.toHaveBeenCalled();
+          expect(stepUris(vizNode)).toEqual(['xslt-saxon:test-document.xsl', OLD_VALIDATOR_URI]);
+          // Only the new XSLT file that was written for the rename is removed, the old files stay
+          expect(mockMetadataContext.deleteResource).toHaveBeenCalledTimes(1);
+          expect(mockMetadataContext.deleteResource).toHaveBeenCalledWith('renamed.xsl');
+        });
+
+        it('should clear the reason of a failed rename when the user cancels the edit', async () => {
+          vi.spyOn(DataMapperMetadataService, 'duplicateValidationWrapper').mockResolvedValue({
+            renames: {},
+            failure: 'boom',
+          });
+          await startRename({
+            'test-document.xsl': 'mock xslt content',
+            'test-document-validation-wrapper.xsd': WRAPPER_CONTENT,
+          });
+          expect(await screen.findByTestId('xslt-document-rename-error')).toBeInTheDocument();
+
+          await userEvent.click(screen.getByRole('textbox', { name: 'XSLT document name' }));
+          await userEvent.click(await screen.findByRole('button', { name: 'Cancel editing' }));
+
+          await waitFor(() => {
+            expect(screen.queryByTestId('xslt-document-rename-error')).not.toBeInTheDocument();
+          });
+        });
+
+        it('should refuse the rename while a validation toggle is pending, and let the toggle finish', async () => {
+          let finishToggle: (warnings: string[]) => void = () => {};
+          vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation').mockImplementation(
+            () => new Promise<string[]>((resolve) => (finishToggle = resolve)),
+          );
+
+          const vizNode = await startRename({ 'test-document.xsl': 'mock xslt content' }, useXmlTarget, async () => {
+            fireEvent.click(await screen.findByTestId('validate-output-checkbox'));
+          });
+
+          try {
+            expect(await screen.findByTestId('xslt-document-rename-error')).toHaveTextContent(
+              'Output validation is being updated, try again in a moment.',
+            );
+            expect(mockMetadataContext.saveResourceContent).not.toHaveBeenCalled();
+            expect(vizNode.updateModel).not.toHaveBeenCalled();
+          } finally {
+            finishToggle([]);
+          }
+        });
+
+        it('should disable the validation checkbox while the renamed document is being saved', async () => {
+          let finishSave: () => void = () => {};
+          await startRename(
+            { 'test-document.xsl': 'mock xslt content' },
+            () => {
+              useXmlTarget();
+              mockMetadataContext.saveResourceContent = vi
+                .fn()
+                .mockImplementation(() => new Promise<void>((resolve) => (finishSave = resolve)));
+            },
+            async () => {
+              expect(await screen.findByTestId('validate-output-checkbox')).toBeEnabled();
+            },
+          );
+
+          try {
+            await waitFor(() => {
+              expect(screen.getByTestId('validate-output-checkbox')).toBeDisabled();
+            });
+          } finally {
+            finishSave();
+          }
+          // The rename ran to the end
           await waitFor(() => {
             expect(mockMetadataContext.deleteResource).toHaveBeenCalledWith('test-document.xsl');
           });
-          expect(mockMetadataContext.deleteResource).not.toHaveBeenCalledWith('test-document-validation-wrapper.xsd');
-          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('boom'));
         });
 
         it('should not delete any old file when repointing the step throws', async () => {
@@ -531,6 +618,21 @@ describe('DataMapperLauncher', () => {
           expect(await screen.findByText('Unable to save document name. Please try again.')).toBeInTheDocument();
           expect(mockMetadataContext.saveResourceContent).toHaveBeenCalledWith('renamed.xsl', 'mock xslt content');
           expect(mockMetadataContext.deleteResource).not.toHaveBeenCalled();
+        });
+
+        it('should show no error when only deleting the old file fails after the route was repointed', async () => {
+          const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+          const vizNode = await startRename({ 'test-document.xsl': 'mock xslt content' }, () => {
+            mockMetadataContext.deleteResource = vi.fn().mockRejectedValue(new Error('locked'));
+          });
+
+          await waitFor(() => {
+            expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Could not delete "test-document.xsl"'));
+          });
+          expect(stepUris(vizNode)).toEqual(['xslt-saxon:renamed.xsl', OLD_VALIDATOR_URI]);
+          expect(screen.queryByText('Unable to save document name. Please try again.')).not.toBeInTheDocument();
+          expect(screen.queryByTestId('xslt-document-rename-error')).not.toBeInTheDocument();
         });
 
         it('should not touch the step nor delete anything when saving the renamed file is rejected', async () => {
@@ -771,15 +873,125 @@ describe('DataMapperLauncher', () => {
         fireEvent.click(checkbox);
 
         await waitFor(() => {
-          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('toggle output validation'), expect.any(Error));
+          expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('enable output validation'), expect.any(Error));
         });
         await waitFor(() => {
           expect(checkbox).toBeEnabled();
         });
         expect(checkbox.checked).toBe(false);
         expect(await screen.findByTestId('validate-output-helper-text')).toHaveTextContent(
-          'Could not enable output validation',
+          'Could not enable output validation: no access',
         );
+      });
+
+      it('should show the state of the model, not the requested one, when enabling is rejected after the model changed', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation').mockImplementation(async () => {
+          // The validator step was added, then a later step of the same call failed
+          isValidationEnabledSpy.mockReturnValue(true);
+          throw new Error('late failure');
+        });
+        const vizNode = createMockVizNode('test-document.xsl');
+        getXsltFileNameSpy.mockReturnValue('test-document.xsl');
+        isValidationEnabledSpy.mockReturnValue(false);
+
+        render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
+
+        const checkbox = (await screen.findByTestId('validate-output-checkbox')) as HTMLInputElement;
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        expect(checkbox.checked).toBe(false);
+        fireEvent.click(checkbox);
+
+        expect(await screen.findByTestId('validate-output-helper-text')).toHaveTextContent(
+          'Could not enable output validation: late failure',
+        );
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        expect(checkbox.checked).toBe(true);
+      });
+
+      it('should keep the checkbox checked and tell the user when disabling the validation is rejected', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation').mockRejectedValue(new Error('locked'));
+        const vizNode = createMockVizNode('test-document.xsl');
+        getXsltFileNameSpy.mockReturnValue('test-document.xsl');
+        // The validator step is still in the model after the failed disable
+        isValidationEnabledSpy.mockReturnValue(true);
+
+        render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
+
+        const checkbox = (await screen.findByTestId('validate-output-checkbox')) as HTMLInputElement;
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        expect(checkbox.checked).toBe(true);
+        fireEvent.click(checkbox);
+
+        expect(await screen.findByTestId('validate-output-helper-text')).toHaveTextContent(
+          'Could not disable output validation: locked',
+        );
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        expect(checkbox.checked).toBe(true);
+      });
+
+      it('should point to the log when the step settings service itself rejects', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.spyOn(DataMapperStepSettingsService, 'updateStepSettings').mockRejectedValue(new Error('model broken'));
+        const vizNode = createMockVizNode('test-document.xsl');
+        getXsltFileNameSpy.mockReturnValue('test-document.xsl');
+
+        render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
+
+        const checkbox = (await screen.findByTestId('validate-output-checkbox')) as HTMLInputElement;
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        fireEvent.click(checkbox);
+
+        expect(await screen.findByTestId('validate-output-helper-text')).toHaveTextContent(
+          'Could not enable output validation, see the log for details.',
+        );
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[DataMapperLauncher]'), expect.any(Error));
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        expect(checkbox.checked).toBe(false);
+      });
+
+      it('should name the disable in the message when the step settings service rejects a disable', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        vi.spyOn(DataMapperStepSettingsService, 'updateStepSettings').mockRejectedValue(new Error('model broken'));
+        const vizNode = createMockVizNode('test-document.xsl');
+        getXsltFileNameSpy.mockReturnValue('test-document.xsl');
+        isValidationEnabledSpy.mockReturnValue(true);
+
+        render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
+
+        const checkbox = (await screen.findByTestId('validate-output-checkbox')) as HTMLInputElement;
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        fireEvent.click(checkbox);
+
+        expect(await screen.findByTestId('validate-output-helper-text')).toHaveTextContent(
+          'Could not disable output validation, see the log for details.',
+        );
+      });
+
+      it('should toggle through the step settings service only', async () => {
+        const updateSpy = vi
+          .spyOn(DataMapperStepSettingsService, 'updateStepSettings')
+          .mockResolvedValue({ settings: { isOutputValidationEnabled: true }, warnings: [] });
+        const setValidationSpy = vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation');
+        const vizNode = createMockVizNode('test-document.xsl');
+        getXsltFileNameSpy.mockReturnValue('test-document.xsl');
+        isValidationEnabledSpy.mockReturnValue(false);
+
+        render(<DataMapperLauncher vizNode={vizNode} />, { wrapper });
+        const checkbox = (await screen.findByTestId('validate-output-checkbox')) as HTMLInputElement;
+        await waitFor(() => expect(checkbox).toBeEnabled());
+        fireEvent.click(checkbox);
+
+        await waitFor(() => {
+          expect(updateSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            vizNode,
+            mockEntitiesContext,
+            expect.objectContaining({ isOutputValidationEnabled: true }),
+          );
+        });
+        expect(setValidationSpy).not.toHaveBeenCalled();
       });
 
       it('should call removeValidationStep when checkbox is toggled OFF', async () => {

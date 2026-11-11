@@ -341,9 +341,9 @@ export class DataMapperMetadataService {
   }
 
   /**
-   * Deletes DataMapper metadata. The generated validation wrapper schema is a DataMapper-managed
-   * file that belongs to the step, so it is removed here as well, regardless of whether the user
-   * keeps the XSLT file. Wrapper removal is best-effort and never blocks the metadata removal.
+   * Deletes DataMapper metadata. The generated files the step owns (today the validation wrapper schema) are
+   * DataMapper-managed, so they are removed here as well, regardless of whether the user keeps the XSLT file.
+   * Their removal is best-effort and never blocks the metadata removal.
    * @param api The metadata API
    * @param metadataId The metadata identifier
    */
@@ -351,7 +351,7 @@ export class DataMapperMetadataService {
     try {
       const metadata = await api.getMetadata<IDataMapperMetadata>(metadataId);
       if (metadata?.xsltPath) {
-        await DataMapperMetadataService.deleteValidationWrapper(api, metadata.xsltPath);
+        await DataMapperMetadataService.deleteManagedFiles(api, metadata.xsltPath);
       }
     } catch (error) {
       console.warn(`Could not clean up the validation wrapper for "${metadataId}": ${error}`);
@@ -387,12 +387,14 @@ export class DataMapperMetadataService {
 
   /**
    * Persists a generated validation wrapper schema, and its aggregator schemas, next to the XSLT file.
+   * A file whose current generated content already equals the new one is not written again, so repeating this with
+   * the same schema files leaves the files (and the file watchers) alone.
    * Aggregators of a previous wrapper that are not needed anymore are removed.
    * @param api The metadata API
    * @param xsltPath The path of the XSLT file the wrapper belongs to
    * @param xsd The wrapper schema content
    * @param aggregators The aggregator schemas the wrapper imports, by path
-   * @returns `undefined` when the wrapper was written; otherwise the reason it was not (a user file with a generated
+   * @returns `undefined` when the wrapper is in place; otherwise the reason it is not (a user file with a generated
    * name exists, or the write failed). The caller reports it.
    */
   static async saveValidationWrapper(
@@ -409,16 +411,20 @@ export class DataMapperMetadataService {
       if (existing.kind === 'user') {
         return `"${wrapperPath}" is not a generated file and must not be overwritten`;
       }
-      for (const path of Object.keys(aggregators)) {
-        if ((await DataMapperMetadataService.classifyFile(api, path)).kind !== 'user') continue;
-        return `"${path}" is not a generated file and must not be overwritten`;
+      const changedAggregators: [path: string, content: string][] = [];
+      for (const [path, content] of Object.entries(aggregators)) {
+        const current = await DataMapperMetadataService.classifyFile(api, path);
+        if (current.kind === 'user') return `"${path}" is not a generated file and must not be overwritten`;
+        if (current.kind !== 'generated' || current.content !== content) changedAggregators.push([path, content]);
       }
       const previousAggregators =
         existing.kind === 'generated'
           ? XmlSchemaWrapperGeneratorService.findAggregatorPaths(wrapperPath, existing.content)
           : [];
-      await Promise.all(Object.entries(aggregators).map(([path, content]) => api.saveResourceContent(path, content)));
-      await api.saveResourceContent(wrapperPath, xsd);
+      await Promise.all(changedAggregators.map(([path, content]) => api.saveResourceContent(path, content)));
+      if (existing.kind !== 'generated' || existing.content !== xsd) {
+        await api.saveResourceContent(wrapperPath, xsd);
+      }
       await Promise.all(
         previousAggregators
           .filter((path) => !(path in aggregators))
@@ -479,16 +485,41 @@ export class DataMapperMetadataService {
         }
       }
       // The aggregators first, the wrapper last: the wrapper only exists when everything it needs exists.
-      await Promise.all(
-        Object.entries(contents)
-          .filter(([path]) => path !== newWrapper)
-          .map(([path, content]) => api.saveResourceContent(path, content)),
+      const aggregatorWrites = Object.entries(contents).filter(([path]) => path !== newWrapper);
+      const results = await Promise.allSettled(
+        aggregatorWrites.map(([path, content]) => api.saveResourceContent(path, content)),
       );
-      await api.saveResourceContent(newWrapper, contents[newWrapper]);
+      const written = aggregatorWrites
+        .filter((_, index) => results[index].status === 'fulfilled')
+        .map(([path]) => path);
+      const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (rejected) {
+        await DataMapperMetadataService.removeCopies(api, written);
+        return { renames: {}, failure: String(rejected.reason) };
+      }
+      try {
+        await api.saveResourceContent(newWrapper, contents[newWrapper]);
+      } catch (error) {
+        await DataMapperMetadataService.removeCopies(api, written);
+        return { renames: {}, failure: String(error) };
+      }
       return { renames };
     } catch (error) {
       return { renames: {}, failure: String(error) };
     }
+  }
+
+  /**
+   * Removes files this service wrote a moment ago and that nothing references yet. Best-effort per file: a failing
+   * removal never replaces the reason the caller is about to report.
+   */
+  private static async removeCopies(api: IMetadataApi, paths: string[]): Promise<void> {
+    const results = await Promise.allSettled(paths.map((path) => api.deleteResource(path)));
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn(`Could not remove "${paths[index]}" after the failed copy: ${result.reason}`);
+      }
+    });
   }
 
   private static warnWrapperCopyFailure(originalXsltPath: string, failure: string | undefined): void {
@@ -521,57 +552,72 @@ export class DataMapperMetadataService {
   }
 
   /**
-   * Duplicates the files a DataMapper step owns: the XSLT file and the generated validation wrapper (if any).
+   * Copies every generated file the step owns to the files of a new XSLT file (today: the validation wrapper and
+   * its aggregators). A new managed file type is added here and in {@link deleteManagedFiles}; it must carry the
+   * Kaoto generated marker, because overwrites and deletes only touch marked files.
+   * @returns `renames`: the old to new path of every file that was really copied, without the XSLT file itself.
+   * `failure` is set when a managed file could not be copied.
+   */
+  private static copyManagedFiles(
+    api: IMetadataApi,
+    oldXsltPath: string,
+    newXsltPath: string,
+  ): Promise<{ renames: Record<string, string>; failure?: string }> {
+    return DataMapperMetadataService.duplicateValidationWrapper(api, oldXsltPath, newXsltPath);
+  }
+
+  /**
+   * Deletes every generated file the step owns (today: the validation wrapper and its aggregators). Best-effort.
+   */
+  private static deleteManagedFiles(api: IMetadataApi, xsltPath: string): Promise<void> {
+    return DataMapperMetadataService.deleteValidationWrapper(api, xsltPath);
+  }
+
+  /**
+   * Duplicates the files a DataMapper step owns: the XSLT file and the generated files it owns (if any).
+   * A managed file that could not be copied is only a `console.warn`: the duplicate/paste addons run outside React
+   * and have no way to show it.
    * The caller applies the returned paths to the step definition, see `DataMapperStepService`.
    * @param api The metadata API
    * @param originalMetadata The metadata containing the original XSLT path
    * @param newXsltPath The path for the duplicated XSLT file
-   * @returns The old to new path of the XSLT file and of every wrapper file that was copied
+   * @returns The old to new path of the XSLT file and of every managed file that was copied
    */
   static async duplicateMetadataFiles(
     api: IMetadataApi,
     originalMetadata: IDataMapperMetadata,
     newXsltPath: string,
   ): Promise<Record<string, string>> {
+    const oldXsltPath = originalMetadata.xsltPath;
     await DataMapperMetadataService.duplicateXsltFile(api, originalMetadata, newXsltPath);
-    return DataMapperMetadataService.withWrapperRenames(api, originalMetadata.xsltPath, newXsltPath);
-  }
-
-  /**
-   * Copies the validation wrapper that belongs to `oldXsltPath` (if there is one), warns when that fails and
-   * returns the old to new path map of the XSLT file and of every wrapper file that was copied.
-   */
-  private static async withWrapperRenames(
-    api: IMetadataApi,
-    oldXsltPath: string,
-    newXsltPath: string,
-  ): Promise<Record<string, string>> {
-    const { renames, failure } = await DataMapperMetadataService.duplicateValidationWrapper(
-      api,
-      oldXsltPath,
-      newXsltPath,
-    );
+    const { renames, failure } = await DataMapperMetadataService.copyManagedFiles(api, oldXsltPath, newXsltPath);
     DataMapperMetadataService.warnWrapperCopyFailure(oldXsltPath, failure);
     return { [oldXsltPath]: newXsltPath, ...renames };
   }
 
   /**
-   * Renames the XSLT file of a DataMapper step together with the files it owns: the metadata points to the new
-   * XSLT file, and the generated validation wrapper moves along. The old files are NOT deleted here: the caller first
-   * applies the returned paths to the step definition, see `DataMapperStepService.applyResourceRenamesToNode`, and
-   * then deletes them with {@link deleteRenamedFiles}. A failing model update therefore never leaves the route
-   * pointing to a deleted file.
+   * Renames the XSLT file of a DataMapper step together with the files it owns. The metadata points to the new XSLT
+   * file, `applyRenames` lets the caller apply the old to new path map to the step definition, and then the old
+   * files are deleted. A failing model update therefore never leaves the route pointing to a deleted file.
+   *
+   * The new files are written first. When that fails (the new XSLT, a managed file, or the metadata update) nothing
+   * references them, so they are removed again and the error is thrown; the route and the metadata are unchanged.
+   * When `applyRenames` throws, the metadata is pointed back, nothing is deleted and the copies stay (the model may
+   * or may not have been changed, and deleting them could leave the route on missing files).
    *
    * @param api The metadata API
    * @param metadataId The metadata identifier
    * @param newXsltPath The new XSLT file path
+   * @param applyRenames Applies the old to new path map to the step definition and persists it
    * @returns The old to new path of every file that was moved; `undefined` when there was nothing to rename (no
    * metadata, the path did not change, the XSLT file does not exist or is unreadable)
+   * @throws An `Error` with a sentence for the user when the rename was aborted
    */
   static async renameXsltFile(
     api: IMetadataApi,
     metadataId: string,
     newXsltPath: string,
+    applyRenames: (renames: Record<string, string>) => void | Promise<void>,
   ): Promise<Record<string, string> | undefined> {
     const metadata = await api.getMetadata<IDataMapperMetadata>(metadataId);
     const oldXsltPath = metadata?.xsltPath;
@@ -581,25 +627,80 @@ export class DataMapperMetadataService {
     const content = await api.getResourceContent(oldXsltPath);
     if (content === undefined) return undefined;
 
-    await api.saveResourceContent(newXsltPath, content);
-    await DataMapperMetadataService.updateXsltPath(api, metadataId, metadata, newXsltPath);
-    return DataMapperMetadataService.withWrapperRenames(api, oldXsltPath, newXsltPath);
+    // The service must not overwrite a file, and the cleanup below must not delete a file it did not create.
+    if (await api.isResourceExist(newXsltPath)) {
+      throw DataMapperMetadataService.renameError(newXsltPath, 'the file already exists');
+    }
+
+    try {
+      await api.saveResourceContent(newXsltPath, content);
+    } catch (error) {
+      throw DataMapperMetadataService.renameError(newXsltPath, error);
+    }
+
+    const { renames: copied, failure } = await DataMapperMetadataService.copyManagedFiles(
+      api,
+      oldXsltPath,
+      newXsltPath,
+    );
+    const renames = { [oldXsltPath]: newXsltPath, ...copied };
+    if (failure) {
+      await DataMapperMetadataService.removeCopies(api, Object.values(renames));
+      throw new Error(
+        `Could not copy the validation wrapper of "${oldXsltPath}", the document was not renamed: ${failure}. ` +
+          'To rename anyway, turn off Validate output, rename, and turn it on again.',
+      );
+    }
+
+    try {
+      await DataMapperMetadataService.updateXsltPath(api, metadataId, metadata, newXsltPath);
+    } catch (error) {
+      await DataMapperMetadataService.removeCopies(api, Object.values(renames));
+      throw DataMapperMetadataService.renameError(newXsltPath, error);
+    }
+
+    try {
+      await applyRenames(renames);
+    } catch (error) {
+      try {
+        await DataMapperMetadataService.updateXsltPath(api, metadataId, metadata, oldXsltPath);
+      } catch (restoreError) {
+        console.warn(`Could not point the metadata back to "${oldXsltPath}": ${restoreError}`);
+      }
+      throw DataMapperMetadataService.renameError(newXsltPath, error);
+    }
+
+    await DataMapperMetadataService.deleteOldFiles(api, oldXsltPath, renames);
+    return renames;
+  }
+
+  private static renameError(newXsltPath: string, reason: unknown): Error {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    return new Error(`Could not rename the document to "${newXsltPath}": ${message}`);
   }
 
   /**
-   * Deletes the files that were moved by {@link renameXsltFile}, once the step definition points to the new ones.
-   * The old XSLT file is always deleted. The old wrapper and its aggregators (the `.xsd` keys of `renames`, i.e. the
-   * ones that were copied) are deleted only when Kaoto generated them.
-   * @param api The metadata API
-   * @param renames The old to new path map returned by {@link renameXsltFile}
+   * Deletes the files that were moved, once the step definition points to the new ones. Best-effort per file: a
+   * failure is logged and never fails the rename. The old XSLT file is always deleted; every other old file only
+   * when it carries the Kaoto generated marker (a user file with a generated name is left alone).
    */
-  static async deleteRenamedFiles(api: IMetadataApi, renames: Record<string, string>): Promise<void> {
+  private static async deleteOldFiles(
+    api: IMetadataApi,
+    oldXsltPath: string,
+    renames: Record<string, string>,
+  ): Promise<void> {
     await Promise.all(
-      Object.keys(renames).map((oldPath) =>
-        oldPath.endsWith('.xsd')
-          ? DataMapperMetadataService.deleteGeneratedFile(api, oldPath)
-          : api.deleteResource(oldPath),
-      ),
+      Object.keys(renames).map(async (oldPath) => {
+        try {
+          if (oldPath === oldXsltPath) {
+            await api.deleteResource(oldPath);
+          } else {
+            await DataMapperMetadataService.deleteGeneratedFile(api, oldPath);
+          }
+        } catch (error) {
+          console.warn(`Could not delete "${oldPath}" after the rename: ${error}`);
+        }
+      }),
     );
   }
 

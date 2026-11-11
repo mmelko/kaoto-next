@@ -1225,6 +1225,88 @@ describe('DataMapperStepService', () => {
       expect(uris(def)).toEqual([`${XSLT_COMPONENT_NAME}:new.xsl`]);
     });
 
+    describe('a copy that predates a rename of the original', () => {
+      const staleDefinition = () =>
+        ({
+          id: 'step-id',
+          steps: [
+            { to: { uri: `${XSLT_COMPONENT_NAME}:stale.xsl` } },
+            { to: { uri: 'validator:stale-validation-wrapper.xsd?failOnNullBody=false' } },
+          ],
+        }) as unknown as Step;
+
+      it('should point the XSLT step to the copy and drop the validator that names the stale file', () => {
+        const def = staleDefinition();
+
+        DataMapperStepService.applyCopiedResources(def, { 'old.xsl': 'new.xsl' }, 'old.xsl');
+
+        expect(uris(def)).toEqual([`${XSLT_COMPONENT_NAME}:new.xsl`]);
+      });
+
+      it('should keep a validator that was already retargeted to the wrapper of the copy', () => {
+        const def = staleDefinition();
+
+        DataMapperStepService.applyCopiedResources(
+          def,
+          { 'old.xsl': 'new.xsl', 'stale-validation-wrapper.xsd': 'new-validation-wrapper.xsd' },
+          'old.xsl',
+        );
+
+        expect(uris(def)).toEqual([
+          `${XSLT_COMPONENT_NAME}:new.xsl`,
+          'validator:new-validation-wrapper.xsd?failOnNullBody=false',
+        ]);
+      });
+
+      it('should change nothing when the original is not in the map', () => {
+        const def = staleDefinition();
+
+        DataMapperStepService.applyCopiedResources(def, { 'other.xsl': 'new.xsl' }, 'old.xsl');
+
+        expect(uris(def)).toEqual([
+          `${XSLT_COMPONENT_NAME}:stale.xsl`,
+          'validator:stale-validation-wrapper.xsd?failOnNullBody=false',
+        ]);
+      });
+    });
+
+    it('should follow the entry of the current XSLT file, whatever the order of the map', () => {
+      const def = definition();
+
+      DataMapperStepService.applyResourceRenames(def, {
+        'other.xml': 'moved.xml',
+        'old-validation-wrapper.xsd': 'new-validation-wrapper.xsd',
+        'old.xsl': 'new.xsl',
+      });
+
+      expect(uris(def)).toEqual([
+        `${XSLT_COMPONENT_NAME}:new.xsl`,
+        'validator:new-validation-wrapper.xsd?failOnNullBody=false',
+      ]);
+    });
+
+    it('should not take an XSLT file that is not in the map from an unrelated entry', () => {
+      const def = definition();
+
+      DataMapperStepService.applyResourceRenames(def, { 'other.xml': 'moved.xml' });
+
+      expect(uris(def)).toEqual([
+        `${XSLT_COMPONENT_NAME}:old.xsl`,
+        'validator:old-validation-wrapper.xsd?failOnNullBody=false',
+      ]);
+    });
+
+    it('should rename an XSLT file that has an .xsd extension', () => {
+      const def = {
+        id: 'step-id',
+        steps: [{ to: { uri: `${XSLT_COMPONENT_NAME}:old.xsd` } }],
+      } as unknown as Step;
+
+      DataMapperStepService.applyResourceRenames(def, { 'old.xsd': 'new.xsl' });
+
+      expect(uris(def)).toEqual([`${XSLT_COMPONENT_NAME}:new.xsl`]);
+    });
+
     it('should clear the XSLT file and drop the wrapper validator of a copy without files', () => {
       const def = definition();
 

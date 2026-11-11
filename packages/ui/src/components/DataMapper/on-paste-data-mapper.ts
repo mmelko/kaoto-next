@@ -96,7 +96,7 @@ const generateDataMapperMetadata = async (
 
   const updatedNode = updatedNodes.get(newId);
   if (updatedNode) {
-    DataMapperStepService.applyCopiedResources(updatedNode, renames);
+    DataMapperStepService.applyCopiedResources(updatedNode, renames, originalMetadata.xsltPath);
   }
 };
 

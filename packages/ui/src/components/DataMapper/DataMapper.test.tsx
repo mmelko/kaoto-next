@@ -11,6 +11,7 @@ import { EntitiesContext, IMetadataApi, MetadataProvider } from '../../providers
 import { DataMapperMetadataService } from '../../services/datamapper-metadata.service';
 import { DataMapperOutputValidationService } from '../../services/datamapper-output-validation.service';
 import { DataMapperStepService } from '../../services/datamapper-step.service';
+import { DataMapperStepSettingsService } from '../../services/datamapper-step-settings.service';
 import { DataMapperValidationStepService } from '../../services/datamapper-validation-step.service';
 import { EMPTY_XSL } from '../../services/mapping/mapping-serializer.service';
 import { createMockEntitiesContext } from '../../stubs/create-mock-entities-context';
@@ -378,6 +379,30 @@ describe('DataMapperPage', () => {
       });
     });
 
+    it('should hand the typed settings to the settings service, show its warning and not call a validation service itself', async () => {
+      const updateSpy = vi
+        .spyOn(DataMapperStepSettingsService, 'updateStepSettings')
+        .mockResolvedValue({ settings: { isOutputValidationEnabled: true }, warnings: ['Part of the schema only'] });
+      const setValidationSpy = vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation');
+      const syncSpy = vi.spyOn(DataMapperOutputValidationService, 'syncOnTargetChange');
+
+      const { user, dataMapperVizNode, entitiesContext } = await renderAndOpenSettings([xsltStep]);
+      await user.click(await screen.findByTestId('validate-output-settings-checkbox'));
+      await user.click(screen.getByTestId('datamapper-settings-save-btn'));
+
+      await waitFor(() => {
+        expect(updateSpy).toHaveBeenCalledWith(
+          expect.anything(),
+          dataMapperVizNode,
+          entitiesContext,
+          expect.objectContaining({ isOutputValidationEnabled: true }),
+        );
+      });
+      expect(await screen.findByText('Part of the schema only')).toBeInTheDocument();
+      expect(setValidationSpy).not.toHaveBeenCalled();
+      expect(syncSpy).not.toHaveBeenCalled();
+    });
+
     it('should keep the other settings and report the real model state when the toggle fails', async () => {
       const toggleError = new Error('boom');
       vi.spyOn(DataMapperOutputValidationService, 'setOutputValidation').mockRejectedValue(toggleError);
@@ -389,8 +414,13 @@ describe('DataMapperPage', () => {
       await user.click(screen.getByTestId('datamapper-settings-save-btn'));
 
       await waitFor(() => {
-        expect(warnSpy).toHaveBeenCalledWith('[DataMapper] Failed to toggle output validation:', toggleError);
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[DataMapperStepSettings] Failed to enable output validation:',
+          toggleError,
+        );
       });
+      // The user is told as well, the console is for developers
+      expect(await screen.findByText('Could not enable output validation: boom')).toBeInTheDocument();
       // The model really has no validator, and the settings are not rolled back by the provider.
       if (!dataMapperVizNode) throw new Error('The DataMapper step was not found');
       expect(DataMapperValidationStepService.isValidationEnabled(dataMapperVizNode)).toBe(false);

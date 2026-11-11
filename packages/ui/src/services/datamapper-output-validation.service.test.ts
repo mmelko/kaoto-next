@@ -397,4 +397,415 @@ describe('DataMapperOutputValidationService', () => {
       expect(files[WRAPPER_PATH]).toBeUndefined();
     });
   });
+  describe('short-circuit of an enable', () => {
+    it('should do no work, and read no metadata, when enabling an already enabled step', async () => {
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(true);
+      const addSpy = vi.spyOn(DataMapperValidationStepService, 'addValidationStep').mockImplementation(() => {});
+
+      const warnings = await setOutputValidation(api as unknown as IMetadataApi, vizNode, true, entitiesContext);
+
+      expect(warnings).toEqual([]);
+      expect(api.getMetadata).not.toHaveBeenCalled();
+      expect(api.saveResourceContent).not.toHaveBeenCalled();
+      expect(addSpy).not.toHaveBeenCalled();
+    });
+
+    it('should still delete the stale wrapper when disabling a step without validator', async () => {
+      files[WRAPPER_PATH] = `${GENERATED_WRAPPER_MARKER}. ${GENERATED_WRAPPER_NOTICE}`;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(false);
+      vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {});
+      api.getMetadata.mockResolvedValue({ xsltPath: XSLT_PATH } as IDataMapperMetadata);
+
+      await setOutputValidation(api as unknown as IMetadataApi, vizNode, false, entitiesContext);
+
+      expect(files[WRAPPER_PATH]).toBeUndefined();
+    });
+  });
+
+  describe('skipIfUnchanged', () => {
+    it('should do no work, and read no metadata, when disabling a step without validator', async () => {
+      files[WRAPPER_PATH] = `${GENERATED_WRAPPER_MARKER}. ${GENERATED_WRAPPER_NOTICE}`;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(false);
+      const removeSpy = vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {});
+
+      const warnings = await setOutputValidation(api as unknown as IMetadataApi, vizNode, false, entitiesContext, true);
+
+      expect(warnings).toEqual([]);
+      expect(api.getMetadata).not.toHaveBeenCalled();
+      expect(api.isResourceExist).not.toHaveBeenCalled();
+      expect(removeSpy).not.toHaveBeenCalled();
+      // The stale wrapper is left for the explicit toggle-off, a Save that changed nothing does not probe for it
+      expect(files[WRAPPER_PATH]).toBeDefined();
+    });
+
+    it('should still disable a step that has a validator', async () => {
+      files[WRAPPER_PATH] = `${GENERATED_WRAPPER_MARKER}. ${GENERATED_WRAPPER_NOTICE}`;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(true);
+      const removeSpy = vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {});
+      api.getMetadata.mockResolvedValue({ xsltPath: XSLT_PATH } as IDataMapperMetadata);
+
+      await setOutputValidation(api as unknown as IMetadataApi, vizNode, false, entitiesContext, true);
+
+      expect(removeSpy).toHaveBeenCalledTimes(1);
+      expect(files[WRAPPER_PATH]).toBeUndefined();
+    });
+
+    it('should read the state when its turn comes, not when it was called', async () => {
+      let validator = false;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockImplementation(() => validator);
+      vi.spyOn(DataMapperValidationStepService, 'addValidationStep').mockImplementation(() => {
+        validator = true;
+      });
+      const removeSpy = vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {
+        validator = false;
+      });
+      let release!: (value: IDataMapperMetadata) => void;
+      api.getMetadata.mockImplementation(
+        () =>
+          new Promise<IDataMapperMetadata>((resolve) => {
+            release = resolve;
+          }),
+      );
+
+      // The step has no validator when both calls are made; the second one only sees the first one's result
+      const enable = setOutputValidation(api as unknown as IMetadataApi, vizNode, true, entitiesContext, true);
+      const disable = setOutputValidation(api as unknown as IMetadataApi, vizNode, false, entitiesContext, true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      release({
+        xsltPath: XSLT_PATH,
+        targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: ['A.xsd'] },
+      } as IDataMapperMetadata);
+      await enable;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      release({ xsltPath: XSLT_PATH } as IDataMapperMetadata);
+      await disable;
+
+      expect(removeSpy).toHaveBeenCalledTimes(1);
+      expect(validator).toBe(false);
+    });
+  });
+
+  describe('per-step serialisation', () => {
+    const nodeA = { id: 'a' } as unknown as IVisualizationNode;
+    const nodeB = { id: 'b' } as unknown as IVisualizationNode;
+    const singleFile = {
+      xsltPath: XSLT_PATH,
+      targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: ['A.xsd'] },
+    };
+    const queues = () => (DataMapperOutputValidationService as unknown as { queues: Map<string, unknown> }).queues;
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const deferred = <T>() => {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+    let pending: Array<ReturnType<typeof deferred<IDataMapperMetadata | undefined>>>;
+    let added: string[];
+
+    const enable = (node: IVisualizationNode) =>
+      setOutputValidation(api as unknown as IMetadataApi, node, true, entitiesContext);
+
+    beforeEach(() => {
+      pending = [];
+      added = [];
+      vi.spyOn(DataMapperStepService, 'getDataMapperMetadataId').mockImplementation(
+        (node) => (node as unknown as { id: string }).id,
+      );
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(false);
+      vi.spyOn(DataMapperValidationStepService, 'addValidationStep').mockImplementation((node) => {
+        added.push((node as unknown as { id: string }).id);
+      });
+      api.getMetadata.mockImplementation(() => {
+        const next = deferred<IDataMapperMetadata | undefined>();
+        pending.push(next);
+        return next.promise;
+      });
+    });
+
+    afterEach(async () => {
+      // The queue is module state: never leave a call pending. Releasing one call starts the next, which pushes
+      // another deferred, so drain until nothing is left.
+      for (let i = 0; i < 10 && queues().size > 0; i++) {
+        for (const next of pending) next.resolve(undefined);
+        await flush();
+      }
+      expect(queues().size).toBe(0);
+    });
+
+    it('should run two calls for the same step one after the other, in call order', async () => {
+      const first = enable(nodeA);
+      const second = enable(nodeA);
+      await flush();
+
+      expect(api.getMetadata).toHaveBeenCalledTimes(1);
+
+      pending[0].resolve(singleFile as IDataMapperMetadata);
+      await first;
+      await flush();
+      expect(api.getMetadata).toHaveBeenCalledTimes(2);
+      pending[1].resolve(singleFile as IDataMapperMetadata);
+      await second;
+
+      expect(added).toEqual(['a', 'a']);
+    });
+
+    it('should read the metadata of the second call only after the first one finished, and complete in call order', async () => {
+      const first = enable(nodeA);
+      const second = enable(nodeA);
+      await flush();
+      // Without the queue both calls would be waiting for their own read here
+      expect(pending).toHaveLength(1);
+      const order: string[] = [];
+      void first.then(() => order.push('first'));
+      void second.then(() => order.push('second'));
+
+      pending[0].resolve(singleFile as IDataMapperMetadata);
+      await flush();
+      expect(pending).toHaveLength(2);
+      pending[1].resolve(singleFile as IDataMapperMetadata);
+      await Promise.all([first, second]);
+
+      expect(order).toEqual(['first', 'second']);
+    });
+
+    it('should not block a different step', async () => {
+      const blocked = enable(nodeA);
+      const other = enable(nodeB);
+      await flush();
+
+      expect(api.getMetadata).toHaveBeenCalledTimes(2);
+      pending[1].resolve(singleFile as IDataMapperMetadata);
+      await other;
+      expect(added).toEqual(['b']);
+
+      pending[0].resolve(singleFile as IDataMapperMetadata);
+      await blocked;
+    });
+
+    it('should run the next call after a failed one, and give the failure to its own caller', async () => {
+      const first = enable(nodeA);
+      const second = enable(nodeA);
+      await flush();
+
+      pending[0].reject(new Error('read failed'));
+      await expect(first).rejects.toThrow('read failed');
+      await flush();
+      pending[1].resolve(singleFile as IDataMapperMetadata);
+
+      await expect(second).resolves.toEqual([]);
+      expect(added).toEqual(['a']);
+    });
+
+    it('should not keep an entry for a step once its last call settled', async () => {
+      const first = enable(nodeA);
+      const second = enable(nodeA);
+      await flush();
+      expect(queues().size).toBe(1);
+
+      pending[0].resolve(undefined);
+      await first;
+      await flush();
+      pending[1].resolve(undefined);
+      await second;
+      await flush();
+
+      expect(queues().size).toBe(0);
+    });
+
+    it('should leave no wrapper when a toggle-off is queued behind a target change', async () => {
+      // Real model state of the validator, so "nothing left behind" is asserted on state
+      let validator = true;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockImplementation(() => validator);
+      vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {
+        validator = false;
+      });
+      vi.spyOn(DataMapperValidationStepService, 'updateValidationStep').mockImplementation(() => {});
+      const syncSave = deferred<void>();
+      files = { ...twoUnconnected };
+      api.saveResourceContent.mockImplementation(async (path: string, content: string) => {
+        await syncSave.promise;
+        files[path] = content;
+      });
+      const metadata = {
+        xsltPath: XSLT_PATH,
+        targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: Object.keys(twoUnconnected) },
+      } as IDataMapperMetadata;
+
+      const sync = syncOutputValidationOnTargetChange(
+        api as unknown as IMetadataApi,
+        nodeA,
+        entitiesContext,
+        metadata,
+        {
+          definitionType: DocumentDefinitionType.XML_SCHEMA,
+          definitionFiles: twoUnconnected,
+        } as unknown as DocumentDefinition,
+      );
+      const toggleOff = setOutputValidation(api as unknown as IMetadataApi, nodeA, false, entitiesContext);
+      await flush();
+      expect(api.getMetadata).not.toHaveBeenCalled();
+
+      syncSave.resolve();
+      await sync;
+      await flush();
+      pending[0].resolve(metadata);
+      await toggleOff;
+
+      expect(files[WRAPPER_PATH]).toBeUndefined();
+      expect(validator).toBe(false);
+    });
+
+    it('should not let a target change write a wrapper after a toggle-off deleted it', async () => {
+      let validator = true;
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockImplementation(() => validator);
+      vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {
+        validator = false;
+      });
+      const updateSpy = vi.spyOn(DataMapperValidationStepService, 'updateValidationStep').mockImplementation(() => {});
+      files = { ...twoUnconnected };
+      const metadata = {
+        xsltPath: XSLT_PATH,
+        targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: Object.keys(twoUnconnected) },
+      } as IDataMapperMetadata;
+
+      const toggleOff = setOutputValidation(api as unknown as IMetadataApi, nodeA, false, entitiesContext);
+      await flush();
+      const sync = syncOutputValidationOnTargetChange(
+        api as unknown as IMetadataApi,
+        nodeA,
+        entitiesContext,
+        metadata,
+        {
+          definitionType: DocumentDefinitionType.XML_SCHEMA,
+          definitionFiles: twoUnconnected,
+        } as unknown as DocumentDefinition,
+      );
+      await flush();
+      // The toggle-off holds the queue at its metadata read: the sync has not started
+      expect(api.saveResourceContent).not.toHaveBeenCalled();
+
+      pending[0].resolve(metadata);
+      await toggleOff;
+      await expect(sync).resolves.toBe(false);
+
+      expect(files[WRAPPER_PATH]).toBeUndefined();
+      expect(api.saveResourceContent).not.toHaveBeenCalled();
+      expect(updateSpy).not.toHaveBeenCalled();
+      expect(validator).toBe(false);
+    });
+
+    it('should throw synchronously, and leave no queue entry, when the step has no metadata id', async () => {
+      vi.spyOn(DataMapperStepService, 'getDataMapperMetadataId').mockImplementation(() => {
+        throw new Error('no id');
+      });
+
+      expect(() => enable(nodeA)).toThrow('no id');
+      expect(queues().size).toBe(0);
+    });
+
+    it('should sync with the target body it was called with, not one changed while queued', async () => {
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(true);
+      const updateSpy = vi.spyOn(DataMapperValidationStepService, 'updateValidationStep').mockImplementation(() => {});
+      const metadata = {
+        xsltPath: XSLT_PATH,
+        targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: ['A.xsd'] },
+      } as IDataMapperMetadata;
+      vi.spyOn(DataMapperValidationStepService, 'removeValidationStep').mockImplementation(() => {});
+      // A disable is never short-circuited, so it holds the queue until its metadata read is released
+      const blocked = setOutputValidation(api as unknown as IMetadataApi, nodeA, false, entitiesContext);
+      await flush();
+
+      const sync = syncOutputValidationOnTargetChange(
+        api as unknown as IMetadataApi,
+        nodeA,
+        entitiesContext,
+        metadata,
+        { definitionType: DocumentDefinitionType.XML_SCHEMA, definitionFiles: {} } as unknown as DocumentDefinition,
+      );
+      // The host reassigns the target body of its shared metadata object for the next target change
+      metadata.targetBody = { type: DocumentDefinitionType.XML_SCHEMA, filePath: ['B.xsd'] };
+
+      pending[0].resolve(undefined);
+      await blocked;
+      await sync;
+
+      expect(updateSpy).toHaveBeenCalledWith(
+        nodeA,
+        expect.objectContaining({ filePath: ['A.xsd'] }),
+        entitiesContext,
+        'A.xsd',
+      );
+    });
+  });
+
+  describe('write-if-changed on a target change', () => {
+    const definitionOf = (definitionFiles: Record<string, string>) =>
+      ({ definitionType: DocumentDefinitionType.XML_SCHEMA, definitionFiles }) as unknown as DocumentDefinition;
+    const metadataOf = (definitionFiles: Record<string, string>) =>
+      ({
+        xsltPath: XSLT_PATH,
+        targetBody: { type: DocumentDefinitionType.XML_SCHEMA, filePath: Object.keys(definitionFiles) },
+      }) as IDataMapperMetadata;
+    const sync = (definitionFiles: Record<string, string>) =>
+      syncOutputValidationOnTargetChange(
+        api as unknown as IMetadataApi,
+        vizNode,
+        entitiesContext,
+        metadataOf(definitionFiles),
+        definitionOf(definitionFiles),
+      );
+
+    beforeEach(() => {
+      vi.spyOn(DataMapperValidationStepService, 'isValidationEnabled').mockReturnValue(true);
+      vi.spyOn(DataMapperValidationStepService, 'updateValidationStep').mockImplementation(() => {});
+    });
+
+    // The target sync runs for the field override, choice selection and abstract substitution actions of the
+    // Field Context Menu as well, because each of them fires a TARGET_BODY update.
+    it('should write no file again for a repeated sync (field override, choice selection, abstract substitution)', async () => {
+      await sync(twoUnconnected);
+      expect(files[WRAPPER_PATH]).toBeDefined();
+      api.saveResourceContent.mockClear();
+
+      await sync(twoUnconnected);
+
+      expect(api.saveResourceContent).not.toHaveBeenCalled();
+    });
+
+    it('should write the wrapper when the schema content changed', async () => {
+      await sync(twoUnconnected);
+      api.saveResourceContent.mockClear();
+
+      await sync({ 'A.xsd': schema('urn:a2', 'A'), 'B.xsd': twoUnconnected['B.xsd'] });
+
+      expect(api.saveResourceContent).toHaveBeenCalledTimes(1);
+      expect(api.saveResourceContent).toHaveBeenCalledWith(WRAPPER_PATH, expect.any(String));
+    });
+
+    describe('with an aggregator', () => {
+      const connected = {
+        'root.xsd': schema('urn:root', 'Root'),
+        'ext1.xsd': schema('urn:ext', 'E1'),
+        'ext2.xsd': schema('urn:ext', 'E2'),
+      };
+      const AGGREGATOR_PATH = 'mapping-validation-wrapper-1.xsd';
+
+      it('should write nothing for a repeated sync and only the aggregator when its content changed', async () => {
+        await sync(connected);
+        expect(files[AGGREGATOR_PATH]).toBeDefined();
+        api.saveResourceContent.mockClear();
+
+        await sync(connected);
+        expect(api.saveResourceContent).not.toHaveBeenCalled();
+
+        await sync({ ...connected, 'ext3.xsd': schema('urn:ext', 'E3') });
+        expect(api.saveResourceContent).toHaveBeenCalledWith(AGGREGATOR_PATH, expect.stringContaining('ext3.xsd'));
+        expect(files[AGGREGATOR_PATH]).toContain('ext3.xsd');
+      });
+    });
+  });
 });
